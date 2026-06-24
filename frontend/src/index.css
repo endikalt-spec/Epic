@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+@theme {
+  --font-manrope: "Manrope", "Heebo", sans-serif;
+  --font-sora: "Sora", sans-serif;
+  --font-frank: "Frank Ruhl Libre", serif;
+
+  --color-ocean-950: #020617;
+  --color-ocean-900: #0f172a;
+  --color-turquoise-500: #14b8a6;
+  --color-turquoise-400: #2dd4bf;
+  --color-gold-matte: #c5a059;
+  --color-gold-glow: #e2c275;
+}
+
+@layer base {
+  body {
+    @apply font-manrope bg-ocean-950 text-slate-100;
+  }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 5px #c5a059; }
+  50% { box-shadow: 0 0 15px #e2c275; }
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s infinite;
+}
+
+.vignette-grid {
+  background-image: radial-gradient(circle at center, transparent 0%, #020617 100%),
+                    linear-gradient(rgba(20, 184, 166, 0.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(20, 184, 166, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+}
