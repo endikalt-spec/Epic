@@ -5,7 +5,7 @@ import { CATEGORIES as FALLBACK_CATS, EXPERIENCES as FALLBACK_EXPS } from "./dat
 import {
   Gift, Search, Star, Check, X, Trash2, ArrowLeft, ArrowRight, Clock, Users,
   ShieldCheck, RefreshCw, Headphones, CalendarClock, Sparkles, Loader2,
-  ChevronLeft, Menu, Copy, Ticket, Building2, Heart, PartyPopper, Plus
+  ChevronLeft, Menu, Copy, Ticket, Building2, PartyPopper, Plus
 } from "lucide-react";
 import axios from "axios";
 
@@ -108,6 +108,7 @@ export default function Vau() {
   const [view, setView] = useState("home"); // home | redeem
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [orderCode, setOrderCode] = useState(null);
+  const [checkoutError, setCheckoutError] = useState("");
 
   const loc = (obj, field) => obj?.[`${field}_${lang}`] ?? obj?.[`${field}_he`] ?? "";
 
@@ -166,14 +167,16 @@ export default function Vau() {
   const handleCheckout = async () => {
     if (!giftBox.length) return;
     setCheckoutLoading(true);
+    setCheckoutError("");
     try {
-      const res = await axios.post(`${API_URL}/checkout`, { experienceIds: giftBox.map((e) => e.id) }, { timeout: 4000 });
+      const res = await axios.post(`${API_URL}/checkout`, { experienceIds: giftBox.map((e) => e.id) }, { timeout: 8000 });
+      // Only surface a code the server actually persisted; only then clear the
+      // cart. Never fabricate a voucher — an un-recorded code can't be redeemed.
       setOrderCode(res.data.code);
-    } catch {
-      // Graceful demo fallback so the flow always completes
-      setOrderCode("VAU-" + Math.random().toString(36).slice(2, 8).toUpperCase());
-    } finally {
       clearGiftBox();
+    } catch {
+      setCheckoutError(t("checkout_error"));
+    } finally {
       setCheckoutLoading(false);
     }
   };
@@ -183,7 +186,7 @@ export default function Vau() {
   const changeLang = (l) => i18n.changeLanguage(l);
 
   if (view === "redeem") {
-    return <RedeemView goHome={goHome} experiences={experiences} loc={loc} t={t} rtl={rtl} lang={lang} />;
+    return <RedeemView goHome={goHome} loc={loc} t={t} rtl={rtl} />;
   }
 
   return (
@@ -221,9 +224,9 @@ export default function Vau() {
 
       {/* Gift box drawer */}
       <GiftDrawer
-        {...{ open: drawerOpen, close: () => setDrawerOpen(false), t, loc, giftBox,
+        {...{ open: drawerOpen, close: () => { setDrawerOpen(false); setCheckoutError(""); }, t, loc, giftBox,
           removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout,
-          orderCode, setOrderCode, goRedeem, rtl }}
+          orderCode, setOrderCode, checkoutError, rtl }}
       />
 
       {/* Experience modal */}
@@ -251,7 +254,7 @@ export default function Vau() {
 
 /* ─────────────────────────── HEADER ─────────────────────────── */
 
-function Header({ t, lang, scrolled, categories, activeCat, setActiveCat, loc, giftCount, openDrawer, goRedeem, changeLang, menuOpen, setMenuOpen }) {
+function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang, menuOpen, setMenuOpen }) {
   const links = [
     { key: "nav_experiences", href: "#catalog" },
     { key: "nav_how", href: "#how" },
@@ -333,7 +336,7 @@ function Header({ t, lang, scrolled, categories, activeCat, setActiveCat, loc, g
 
 /* ─────────────────────────── HERO ─────────────────────────── */
 
-function Hero({ t, rtl, experiences }) {
+function Hero({ t, experiences }) {
   const pics = experiences.length ? experiences : FALLBACK_EXPS;
   const feat = pics[1] || pics[0];
   const feat2 = pics[2] || pics[0];
@@ -557,7 +560,7 @@ function FilterChip({ active, onClick, children }) {
   );
 }
 
-function ExperienceCard({ exp, t, loc, openModal, add, added, boxFull, rtl }) {
+function ExperienceCard({ exp, t, loc, openModal, add, added, boxFull }) {
   return (
     <article className="group flex flex-col rounded-3xl overflow-hidden bg-white shadow-soft hover:shadow-lift hover:-translate-y-1 transition-all duration-300">
       <button onClick={() => openModal(exp)} className="relative h-56 block text-start cursor-pointer">
@@ -789,7 +792,7 @@ function Footer({ t, lang, goRedeem }) {
 
 /* ─────────────────────────── GIFT DRAWER ─────────────────────────── */
 
-function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, goRedeem, rtl }) {
+function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, checkoutError, rtl }) {
   const [copied, setCopied] = useState(false);
   const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
 
@@ -864,6 +867,9 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                 <span className="font-bold text-ink-500">{t("total")}</span>
                 <span className="font-display text-2xl font-extrabold text-ink-900">{nis(total)}</span>
               </div>
+              {checkoutError && (
+                <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center">{checkoutError}</p>
+              )}
               <Btn variant="primary" size="lg" className="w-full" loading={checkoutLoading} onClick={handleCheckout}>{t("checkout")}</Btn>
               <button onClick={clearGiftBox} className="w-full text-sm font-bold text-ink-400 hover:text-coral-600">{t("clear_box")}</button>
             </div>
@@ -876,7 +882,7 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
 
 /* ─────────────────────────── EXPERIENCE MODAL ─────────────────────────── */
 
-function ExperienceModal({ exp, close, t, loc, add, added, boxFull, rtl }) {
+function ExperienceModal({ exp, close, t, loc, add, added, boxFull }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={close}>
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm animate-pop" />
@@ -916,35 +922,43 @@ function ExperienceModal({ exp, close, t, loc, add, added, boxFull, rtl }) {
 
 /* ─────────────────────────── REDEEM VIEW ─────────────────────────── */
 
-function RedeemView({ goHome, experiences, loc, t, rtl, lang }) {
+function RedeemView({ goHome, loc, t, rtl }) {
   const [step, setStep] = useState(0); // 0 enter code, 1 choose, 2 done
   const [code, setCode] = useState("");
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [choosing, setChoosing] = useState(null);
   const [error, setError] = useState("");
-  const pool = experiences.length ? experiences : FALLBACK_EXPS;
 
   const activate = async (e) => {
     e?.preventDefault();
     if (!code.trim()) return;
     setLoading(true); setError("");
     try {
-      const res = await axios.post(`${API_URL}/activate`, { code: code.trim() }, { timeout: 4000 });
+      const res = await axios.post(`${API_URL}/activate`, { code: code.trim() }, { timeout: 8000 });
+      // Only a code the server recognises unlocks the options. A 404 for a
+      // mistyped/nonexistent voucher must stay an error, not open selection.
       setOptions(res.data.options || []);
       setStep(1);
     } catch {
-      // Demo fallback: any code activates a curated selection
-      const sample = [...pool].sort(() => 0.5 - Math.random()).slice(0, 4);
-      setOptions(sample);
-      setStep(1);
+      setError(t("redeem_error"));
     } finally {
       setLoading(false);
     }
   };
 
   const choose = async (exp) => {
-    try { await axios.post(`${API_URL}/redeem`, { code: code.trim(), experienceId: exp.id }, { timeout: 4000 }); } catch { /* demo */ }
-    setStep(2);
+    setChoosing(exp.id); setError("");
+    try {
+      // Only confirm once the backend has recorded the selection; otherwise the
+      // recipient would think scheduling is done while nothing was persisted.
+      await axios.post(`${API_URL}/redeem`, { code: code.trim(), experienceId: exp.id }, { timeout: 8000 });
+      setStep(2);
+    } catch {
+      setError(t("redeem_select_error"));
+    } finally {
+      setChoosing(null);
+    }
   };
 
   return (
@@ -984,12 +998,14 @@ function RedeemView({ goHome, experiences, loc, t, rtl, lang }) {
                 <div className="text-sm text-ink-500">{t("redeem_choose_text")}</div>
               </div>
             </div>
+            {error && <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center mb-4">{error}</p>}
             <div className="space-y-3">
               {options.map((exp) => (
                 <button
                   key={exp.id}
                   onClick={() => choose(exp)}
-                  className="group w-full bg-white rounded-2xl shadow-soft hover:shadow-lift p-3 flex items-center gap-4 text-start transition-all hover:-translate-y-0.5"
+                  disabled={choosing != null}
+                  className="group w-full bg-white rounded-2xl shadow-soft hover:shadow-lift p-3 flex items-center gap-4 text-start transition-all hover:-translate-y-0.5 disabled:opacity-60"
                 >
                   <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0">
                     <SmartImg src={exp.img} alt="" emoji={exp.emoji} tint={exp.tint} className="w-full h-full" />
@@ -999,7 +1015,9 @@ function RedeemView({ goHome, experiences, loc, t, rtl, lang }) {
                     <Stars rating={exp.rating} count={exp.reviews_count} />
                   </div>
                   <span className="inline-flex items-center gap-1 rounded-full bg-coral-50 text-coral-700 px-4 py-2 font-bold group-hover:bg-coral-500 group-hover:text-white transition-all shrink-0">
-                    {t("select")} {rtl ? <ChevronLeft size={16} /> : <ArrowRight size={16} />}
+                    {choosing === exp.id
+                      ? <Loader2 size={16} className="animate-spin" />
+                      : <>{t("select")} {rtl ? <ChevronLeft size={16} /> : <ArrowRight size={16} />}</>}
                   </span>
                 </button>
               ))}
