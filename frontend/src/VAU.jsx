@@ -34,7 +34,7 @@ function Button({ children, variant = "primary", className = "", loading = false
   );
 }
 
-export default function Epicent() {
+export default function VAU() {
   const { t, i18n } = useTranslation();
   const { giftBox, addToGiftBox, removeFromGiftBox, clearGiftBox } = useStore();
   const [activeCat, setActiveCat] = useState("all");
@@ -143,7 +143,7 @@ export default function Epicent() {
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 md:px-12 py-5 flex items-center justify-between gap-4 ${scrolled ? "bg-ocean-950/80 backdrop-blur-2xl border-b border-white/5 shadow-2xl" : "bg-transparent"}`}>
         <div className="flex items-center gap-10">
           <span className="text-2xl font-black tracking-[-0.05em] cursor-pointer font-sora" onClick={() => setPage("home")}>
-            EPICENT
+            VAU
           </span>
           <div className="hidden lg:flex gap-2">
             <button onClick={() => setActiveCat("all")} className={`px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${activeCat === "all" ? "text-turquoise-400 bg-turquoise-400/10" : "text-slate-500 hover:text-slate-200"} rounded-lg`}>
@@ -361,7 +361,7 @@ function RedeemPage({ code, setCode, step, setStep, goHome, redeemData, handleAc
             <h1 className="text-5xl font-black mb-6 tracking-tight font-sora uppercase">{t('redeem_step_0')}</h1>
             <input
               className="w-full bg-white/5 border border-white/10 rounded-3xl px-8 py-7 text-4xl text-center tracking-[0.6em] font-black text-turquoise-400 focus:border-turquoise-400/50 outline-none transition-all mb-8 placeholder:tracking-normal placeholder:text-slate-800"
-              placeholder="EPIC-XXXX"
+              placeholder="VAU-XXXX"
               value={code}
               onChange={e => setCode(e.target.value.toUpperCase())}
             />

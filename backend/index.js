@@ -55,7 +55,7 @@ app.post('/api/checkout', async (req, res) => {
   }
 
   try {
-    const code = 'EPIC-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    const code = 'VAU-' + Math.random().toString(36).substring(2, 10).toUpperCase();
 
     // Start transaction
     await db.query('BEGIN');

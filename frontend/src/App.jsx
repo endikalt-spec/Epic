@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import Epicent from './Epicent';
+import VAU from './VAU';
 import { StoreProvider, useStore } from './StoreContext';
 
 const AppContent = () => {
@@ -15,7 +15,7 @@ const AppContent = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Epicent />} />
+        <Route path="/" element={<VAU />} />
       </Routes>
     </Router>
   );
