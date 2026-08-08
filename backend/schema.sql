@@ -1,30 +1,35 @@
 CREATE TABLE IF NOT EXISTS categories (
     id SERIAL PRIMARY KEY,
     name_he TEXT NOT NULL,
-    name_en TEXT NOT NULL,
     name_ru TEXT NOT NULL,
-    slug TEXT UNIQUE NOT NULL
+    name_en TEXT,
+    slug TEXT UNIQUE NOT NULL,
+    emoji TEXT,
+    img TEXT,
+    tint TEXT
 );
 
 CREATE TABLE IF NOT EXISTS experiences (
     id SERIAL PRIMARY KEY,
     title_he TEXT NOT NULL,
-    title_en TEXT NOT NULL,
     title_ru TEXT NOT NULL,
+    title_en TEXT,
     description_he TEXT,
-    description_en TEXT,
     description_ru TEXT,
+    description_en TEXT,
     price INTEGER NOT NULL,
     old_price INTEGER,
     rating DECIMAL(3,2) DEFAULT 5.0,
     reviews_count INTEGER DEFAULT 0,
-    participants_text_he TEXT,
-    participants_text_en TEXT,
-    participants_text_ru TEXT,
-    duration_text_he TEXT,
-    duration_text_en TEXT,
-    duration_text_ru TEXT,
+    participants_he TEXT,
+    participants_ru TEXT,
+    participants_en TEXT,
+    duration_he TEXT,
+    duration_ru TEXT,
+    duration_en TEXT,
     emoji TEXT,
+    img TEXT,
+    tint TEXT,
     category_id INTEGER REFERENCES categories(id),
     is_best_seller BOOLEAN DEFAULT FALSE
 );

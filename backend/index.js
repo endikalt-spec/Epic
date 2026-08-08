@@ -31,13 +31,15 @@ app.get('/api/categories', async (req, res) => {
 app.get('/api/experiences', async (req, res) => {
   try {
     const { category } = req.query;
-    let query = 'SELECT * FROM experiences';
+    let query = 'SELECT e.*, c.slug AS category_slug FROM experiences e LEFT JOIN categories c ON e.category_id = c.id';
     let params = [];
 
     if (category && category !== 'all') {
-      query += ' WHERE category_id = (SELECT id FROM categories WHERE slug = $1)';
+      query += ' WHERE c.slug = $1';
       params.push(category);
     }
+
+    query += ' ORDER BY e.is_best_seller DESC, e.id ASC';
 
     const result = await db.query(query, params);
     res.json(result.rows);
@@ -55,7 +57,7 @@ app.post('/api/checkout', async (req, res) => {
   }
 
   try {
-    const code = 'EPIC-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    const code = 'VAU-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
     // Start transaction
     await db.query('BEGIN');
