@@ -195,6 +195,31 @@ networks.
 
 ---
 
+## Platform features (auth, payments, vouchers, AI assistant)
+
+Beyond the storefront, VAU ships a commerce/identity scaffold that runs in
+**demo mode with no keys** and becomes production-grade via `.env`
+(`backend/.env.example`). Full details and integration seams:
+[`docs/PLATFORM.md`](docs/PLATFORM.md).
+
+- **Login** — Sign in with **Google** and **Apple** (real OAuth when configured;
+  one-tap demo login otherwise), JWT sessions.
+- **Payment gateway** — provider-agnostic module with a **mock** adapter (default)
+  and a **Stripe** adapter (Visa/Mastercard + Apple Pay + Google Pay). Checkout
+  issues a voucher only on a real `succeeded` charge.
+- **E-vouchers** — on purchase the buyer receives a digital voucher by email with
+  a **QR code** and a **Code128 barcode**. Vouchers are **personalized (именной)**
+  or **bearer (неименной)**.
+- **Anti-fraud** — HMAC-signed codes (forgery-proof offline), per-IP velocity
+  limits, single-use **atomic** redemption (no double-spend), recipient binding
+  for personalized vouchers, and an audit trail.
+- **AI gift assistant** — a chat concierge that recommends experiences from the
+  catalog. Uses **Anthropic Claude** when `ANTHROPIC_API_KEY` is set; a
+  deterministic recommender otherwise.
+
+Copy `backend/.env.example` to `backend/.env` and fill in only the providers you
+want to enable — everything else stays in demo mode.
+
 ## Internationalization (Hebrew / Russian)
 
 - Default language is **Hebrew** with full **RTL** layout; **Russian** is the

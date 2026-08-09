@@ -5,11 +5,13 @@ import { CATEGORIES as FALLBACK_CATS, EXPERIENCES as FALLBACK_EXPS } from "./dat
 import {
   Gift, Search, Star, Check, X, Trash2, ArrowLeft, ArrowRight, Clock, Users,
   ShieldCheck, RefreshCw, Headphones, CalendarClock, Sparkles, Loader2,
-  ChevronLeft, Menu, Copy, Ticket, Building2, PartyPopper, Plus
+  ChevronLeft, Menu, Copy, Ticket, Building2, PartyPopper, Plus,
+  LogIn, CreditCard, Smartphone
 } from "lucide-react";
 import axios from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+import LoginModal from "./LoginModal";
+import AiAssistant from "./AiAssistant";
+import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, getMe } from "./api";
 const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
@@ -109,6 +111,9 @@ export default function Vau() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [orderCode, setOrderCode] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
+  const [voucher, setVoucher] = useState(null);
+  const [user, setUser] = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   const loc = (obj, field) => obj?.[`${field}_${lang}`] ?? obj?.[`${field}_he`] ?? "";
 
@@ -143,6 +148,23 @@ export default function Vau() {
     return () => window.removeEventListener("scroll", h);
   }, []);
 
+  // Restore session: pick up a token from the OAuth redirect (?token=...) or storage.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken) {
+      localStorage.setItem("vau_token", urlToken);
+      params.delete("token");
+      const qs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+    }
+    if (localStorage.getItem("vau_token")) {
+      getMe().then((d) => setUser(d.user)).catch(() => {});
+    }
+  }, []);
+
+  const signOut = () => { localStorage.removeItem("vau_token"); setUser(null); };
+
   // Lock body scroll when an overlay is open
   useEffect(() => {
     const open = drawerOpen || modalExp || menuOpen;
@@ -164,15 +186,29 @@ export default function Vau() {
   const inBox = (id) => giftBox.some((i) => i.id === id);
   const boxFull = giftBox.length >= 5;
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (form) => {
     if (!giftBox.length) return;
     setCheckoutLoading(true);
     setCheckoutError("");
     try {
-      const res = await axios.post(`${API_URL}/checkout`, { experienceIds: giftBox.map((e) => e.id) }, { timeout: 8000 });
-      // Only surface a code the server actually persisted; only then clear the
-      // cart. Never fabricate a voucher — an un-recorded code can't be redeemed.
-      setOrderCode(res.data.code);
+      const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
+      const res = await apiCheckout({
+        experienceIds: giftBox.map((e) => e.id),
+        amount: total,
+        method: form.method,
+        buyerEmail: form.buyerEmail,
+        voucherType: form.voucherType,
+        recipient:
+          form.voucherType === "personalized"
+            ? { name: form.recipientName, email: form.recipientEmail }
+            : form.recipientEmail
+            ? { email: form.recipientEmail }
+            : null,
+        cardLast4: form.cardLast4 || undefined,
+      });
+      // Only surface a voucher the server actually issued; only then clear the cart.
+      setOrderCode(res.code);
+      setVoucher(res.voucher);
       clearGiftBox();
     } catch {
       setCheckoutError(t("checkout_error"));
@@ -192,9 +228,10 @@ export default function Vau() {
   return (
     <div className="min-h-screen bg-cream-50 text-ink-900 overflow-x-hidden">
       <Header
-        {...{ t, lang, rtl, scrolled, categories, activeCat, setActiveCat, loc,
+        {...{ t, lang, scrolled,
           giftCount: giftBox.length, openDrawer: () => setDrawerOpen(true),
-          goRedeem, changeLang, menuOpen, setMenuOpen }}
+          goRedeem, changeLang, menuOpen, setMenuOpen,
+          user, onSignIn: () => setLoginOpen(true), onSignOut: signOut }}
       />
 
       <Hero {...{ t, rtl, experiences }} />
@@ -226,7 +263,7 @@ export default function Vau() {
       <GiftDrawer
         {...{ open: drawerOpen, close: () => { setDrawerOpen(false); setCheckoutError(""); }, t, loc, giftBox,
           removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout,
-          orderCode, setOrderCode, checkoutError, rtl }}
+          orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl }}
       />
 
       {/* Experience modal */}
@@ -248,13 +285,22 @@ export default function Vau() {
           <span>{giftBox.length}</span>
         </button>
       )}
+
+      {/* AI gift assistant */}
+      <AiAssistant
+        {...{ experiences: experiences.length ? experiences : FALLBACK_EXPS, lang, loc, t, rtl,
+          onAdd: (e) => { addToGiftBox(e); }, inBox }}
+      />
+
+      {/* Sign in */}
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLogin={setUser} t={t} rtl={rtl} />
     </div>
   );
 }
 
 /* ─────────────────────────── HEADER ─────────────────────────── */
 
-function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang, menuOpen, setMenuOpen }) {
+function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang, menuOpen, setMenuOpen, user, onSignIn, onSignOut }) {
   const links = [
     { key: "nav_experiences", href: "#catalog" },
     { key: "nav_how", href: "#how" },
@@ -294,6 +340,19 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang
           <button onClick={goRedeem} className="hidden sm:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
             <Ticket size={16} /> {t("redeem_voucher")}
           </button>
+
+          {user ? (
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold" title={user.name}>
+                {(user.name || "U").charAt(0).toUpperCase()}
+              </span>
+              <button onClick={onSignOut} className="text-xs font-bold text-ink-500 hover:text-coral-600">{t("sign_out")}</button>
+            </div>
+          ) : (
+            <button onClick={onSignIn} className="hidden sm:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+              <LogIn size={16} /> {t("sign_in")}
+            </button>
+          )}
 
           <button onClick={openDrawer} className="relative inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-4 py-2.5 text-sm font-bold hover:bg-ink-800 transition-colors">
             <Gift size={17} />
@@ -792,16 +851,38 @@ function Footer({ t, lang, goRedeem }) {
 
 /* ─────────────────────────── GIFT DRAWER ─────────────────────────── */
 
-function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, checkoutError, rtl }) {
+function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl }) {
   const [copied, setCopied] = useState(false);
+  const [buyerEmailInput, setBuyerEmailInput] = useState("");
+  const [voucherType, setVoucherType] = useState("bearer");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [method, setMethod] = useState("card");
+  const [cardLast4, setCardLast4] = useState("");
   const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
+
+  // Default to the signed-in user's email without an effect (avoids cascading renders).
+  const buyerEmail = buyerEmailInput || user?.email || "";
+  const setBuyerEmail = setBuyerEmailInput;
 
   const copy = () => {
     navigator.clipboard?.writeText(orderCode).then(() => {
       setCopied(true); setTimeout(() => setCopied(false), 1800);
     }).catch(() => {});
   };
-  const closeAll = () => { setOrderCode(null); close(); };
+  const closeAll = () => { setOrderCode(null); setVoucher(null); close(); };
+
+  const emailOk = /.+@.+\..+/.test(buyerEmail);
+  const recipientOk = voucherType !== "personalized" || /.+@.+\..+/.test(recipientEmail);
+  const canPay = emailOk && recipientOk && giftBox.length > 0;
+
+  const submit = () => handleCheckout({ buyerEmail, voucherType, recipientName, recipientEmail, method, cardLast4 });
+
+  const methods = [
+    ["card", t("pay_card"), CreditCard],
+    ["apple_pay", "Apple Pay", Smartphone],
+    ["google_pay", "Google Pay", Smartphone],
+  ];
 
   return (
     <div className={`fixed inset-0 z-[60] ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
@@ -816,15 +897,23 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
         </div>
 
         {orderCode ? (
-          /* Success state */
-          <div className="flex-1 flex flex-col items-center justify-center text-center px-8 animate-pop">
-            <div className="text-6xl mb-5">🎉</div>
-            <h4 className="font-display text-2xl font-extrabold mb-2">{t("order_success_title")}</h4>
-            <p className="text-ink-500 mb-6">{t("order_success_text")}</p>
-            <div className="w-full rounded-2xl border-2 border-dashed border-coral-300 bg-white p-5 mb-4">
+          /* Success state — issued e-voucher with QR + barcode */
+          <div className="flex-1 overflow-y-auto text-center px-6 py-6 animate-pop">
+            <div className="text-5xl mb-3">🎉</div>
+            <h4 className="font-display text-2xl font-extrabold mb-1">{t("order_success_title")}</h4>
+            <p className="text-ink-500 mb-4 text-sm">{voucher ? t("voucher_ready") : t("order_success_text")}</p>
+            <div className="rounded-2xl border-2 border-dashed border-coral-300 bg-white p-5 mb-4">
               <div className="text-xs font-bold text-ink-400 mb-1">{t("order_code_label")}</div>
               <div className="font-display text-2xl font-extrabold tracking-widest text-coral-600">{orderCode}</div>
+              {voucher?.qr && (
+                <>
+                  <img src={voucher.qr} alt="QR" className="mx-auto mt-4 w-40 h-40 rounded-xl" />
+                  {voucher.barcode && <img src={voucher.barcode} alt="barcode" className="mx-auto mt-3 max-w-full" />}
+                  <p className="text-[11px] text-ink-400 mt-2">{t("voucher_scan")}</p>
+                </>
+              )}
             </div>
+            {buyerEmail && <p className="text-xs text-ink-500 mb-4">{t("email_sent_to")}: <b>{buyerEmail}</b></p>}
             <Btn variant="soft" onClick={copy} className="mb-3 w-full">
               {copied ? <><Check size={16} /> {t("copied")}</> : <><Copy size={16} /> {t("copy_code")}</>}
             </Btn>
@@ -862,15 +951,64 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                 </button>
               )}
             </div>
-            <div className="border-t border-cream-200 px-6 py-5 space-y-4 bg-white">
-              <div className="flex items-center justify-between">
+            <div className="border-t border-cream-200 px-6 py-5 space-y-4 bg-white max-h-[62vh] overflow-y-auto">
+              {/* Buyer email */}
+              <div>
+                <label className="text-xs font-bold text-ink-500 mb-1 block">{t("buyer_email")}</label>
+                <input type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="you@email.com"
+                  className="w-full rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+              </div>
+
+              {/* Voucher type: bearer vs personalized */}
+              <div>
+                <label className="text-xs font-bold text-ink-500 mb-1 block">{t("voucher_type")}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[["bearer", t("voucher_bearer")], ["personalized", t("voucher_personalized")]].map(([val, label]) => (
+                    <button key={val} onClick={() => setVoucherType(val)}
+                      className={`rounded-xl px-3 py-2 text-xs font-bold border transition-all ${voucherType === val ? "bg-coral-500 text-white border-coral-500" : "bg-white text-ink-600 border-cream-300 hover:border-coral-300"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {voucherType === "personalized" && (
+                <div className="space-y-2 rounded-xl bg-cream-100 p-3">
+                  <input value={recipientName} onChange={(e) => setRecipientName(e.target.value)} placeholder={t("recipient_name")}
+                    className="w-full rounded-lg bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                  <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder={t("recipient_email")}
+                    className="w-full rounded-lg bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                  <p className="text-[11px] text-ink-400 flex items-center gap-1"><ShieldCheck size={12} className="text-teal-500" /> {t("personalized_hint")}</p>
+                </div>
+              )}
+
+              {/* Payment method */}
+              <div>
+                <label className="text-xs font-bold text-ink-500 mb-1 block">{t("pay_method")}</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {methods.map(([val, label, Icon]) => (
+                    <button key={val} onClick={() => setMethod(val)}
+                      className={`rounded-xl px-2 py-2.5 text-[11px] font-bold border flex flex-col items-center gap-1 transition-all ${method === val ? "bg-ink-900 text-white border-ink-900" : "bg-white text-ink-600 border-cream-300 hover:border-coral-300"}`}>
+                      <Icon size={16} /> {label}
+                    </button>
+                  ))}
+                </div>
+                {method === "card" && (
+                  <input value={cardLast4} onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="•••• •••• •••• 1234"
+                    className="w-full mt-2 rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
                 <span className="font-bold text-ink-500">{t("total")}</span>
                 <span className="font-display text-2xl font-extrabold text-ink-900">{nis(total)}</span>
               </div>
               {checkoutError && (
                 <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center">{checkoutError}</p>
               )}
-              <Btn variant="primary" size="lg" className="w-full" loading={checkoutLoading} onClick={handleCheckout}>{t("checkout")}</Btn>
+              <Btn variant="primary" size="lg" className="w-full" loading={checkoutLoading} disabled={!canPay} onClick={submit}>
+                {t("checkout")} · {nis(total)}
+              </Btn>
               <button onClick={clearGiftBox} className="w-full text-sm font-bold text-ink-400 hover:text-coral-600">{t("clear_box")}</button>
             </div>
           </>
@@ -922,26 +1060,35 @@ function ExperienceModal({ exp, close, t, loc, add, added, boxFull }) {
 
 /* ─────────────────────────── REDEEM VIEW ─────────────────────────── */
 
+// Read QR-link params once at module load (client-only SPA).
+const REDEEM_PARAMS = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+
 function RedeemView({ goHome, loc, t, rtl }) {
   const [step, setStep] = useState(0); // 0 enter code, 1 choose, 2 done
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(() => (REDEEM_PARAMS.get("code") || "").toUpperCase());
+  const [token] = useState(() => REDEEM_PARAMS.get("t") || "");
+  const [signature] = useState(() => REDEEM_PARAMS.get("s") || "");
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [options, setOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [choosing, setChoosing] = useState(null);
   const [error, setError] = useState("");
+
+  const recipient = recipientEmail ? { email: recipientEmail } : undefined;
 
   const activate = async (e) => {
     e?.preventDefault();
     if (!code.trim()) return;
     setLoading(true); setError("");
     try {
-      const res = await axios.post(`${API_URL}/activate`, { code: code.trim() }, { timeout: 8000 });
       // Only a code the server recognises unlocks the options. A 404 for a
       // mistyped/nonexistent voucher must stay an error, not open selection.
-      setOptions(res.data.options || []);
+      const res = await activateVoucher({ code: code.trim(), token: token || undefined, signature: signature || undefined, recipient });
+      setOptions(res.options || []);
       setStep(1);
-    } catch {
-      setError(t("redeem_error"));
+    } catch (err) {
+      const reason = err?.response?.data?.error;
+      setError(reason === "recipient_mismatch" ? t("redeem_recipient_email") : t("redeem_error"));
     } finally {
       setLoading(false);
     }
@@ -950,9 +1097,9 @@ function RedeemView({ goHome, loc, t, rtl }) {
   const choose = async (exp) => {
     setChoosing(exp.id); setError("");
     try {
-      // Only confirm once the backend has recorded the selection; otherwise the
-      // recipient would think scheduling is done while nothing was persisted.
-      await axios.post(`${API_URL}/redeem`, { code: code.trim(), experienceId: exp.id }, { timeout: 8000 });
+      // Only confirm once the backend has recorded the selection (single-use,
+      // atomic); otherwise the recipient would think scheduling is done.
+      await redeemVoucher({ code: code.trim(), experienceId: exp.id, token: token || undefined, signature: signature || undefined, recipient });
       setStep(2);
     } catch {
       setError(t("redeem_select_error"));
@@ -983,6 +1130,13 @@ function RedeemView({ goHome, loc, t, rtl }) {
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder={t("redeem_code_placeholder")}
               className="w-full rounded-2xl bg-cream-100 px-6 py-5 text-center text-2xl font-display font-extrabold tracking-widest text-ink-900 outline-none focus:ring-2 focus:ring-coral-400 mb-3 placeholder:text-ink-300 placeholder:tracking-normal"
+            />
+            <input
+              type="email"
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
+              placeholder={t("redeem_recipient_email")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-3.5 text-center text-sm outline-none focus:ring-2 focus:ring-coral-300 mb-3 placeholder:text-ink-300"
             />
             {error && <p className="text-coral-600 text-sm font-semibold mb-3">{error}</p>}
             <Btn type="submit" variant="primary" size="lg" className="w-full" loading={loading}>{t("redeem_activate")}</Btn>

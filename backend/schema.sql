@@ -48,3 +48,55 @@ CREATE TABLE IF NOT EXISTS certificate_options (
     experience_id INTEGER REFERENCES experiences(id),
     PRIMARY KEY (certificate_id, experience_id)
 );
+
+-- ── Accounts (Google / Apple sign-in) ──
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,           -- e.g. google:123 / apple:abc
+    email TEXT,
+    name TEXT,
+    provider TEXT,                 -- google | apple
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ── Payments (gateway records) ──
+CREATE TABLE IF NOT EXISTS payments (
+    id SERIAL PRIMARY KEY,
+    provider TEXT,                 -- mock | stripe | ...
+    provider_ref TEXT,             -- gateway payment/intent id
+    amount INTEGER NOT NULL,
+    currency TEXT DEFAULT 'ILS',
+    method TEXT,                   -- card | apple_pay | google_pay
+    status TEXT DEFAULT 'processing',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ── Vouchers (e-vouchers with QR + barcode; personalized or bearer) ──
+CREATE TABLE IF NOT EXISTS vouchers (
+    id SERIAL PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    token TEXT NOT NULL,           -- opaque secret embedded in the QR link
+    signature TEXT NOT NULL,       -- HMAC over code|token|type|recipient
+    type TEXT NOT NULL DEFAULT 'bearer',      -- personalized (именной) | bearer (неименной)
+    status TEXT NOT NULL DEFAULT 'active',     -- active | redeemed | expired
+    recipient_ref TEXT,            -- hashed recipient email for personalized vouchers
+    recipient_email TEXT,
+    recipient_name TEXT,
+    buyer_email TEXT,
+    buyer_user_id TEXT REFERENCES users(id),
+    payment_id INTEGER REFERENCES payments(id),
+    option_ids INTEGER[] DEFAULT '{}',         -- experiences the recipient can choose from
+    selected_experience_id INTEGER REFERENCES experiences(id),
+    expires_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    redeemed_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_vouchers_code ON vouchers(code);
+
+-- ── Redemption attempts (fraud audit trail) ──
+CREATE TABLE IF NOT EXISTS redemption_attempts (
+    id SERIAL PRIMARY KEY,
+    code TEXT,
+    ip TEXT,
+    result TEXT,                   -- ok | not_found | already_redeemed | bad_signature | ...
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
