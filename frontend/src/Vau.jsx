@@ -12,7 +12,7 @@ import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
-import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
+import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
 const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
@@ -100,9 +100,9 @@ export default function Vau() {
   const rtl = lang === "he";
   const { giftBox, addToGiftBox, removeFromGiftBox, clearGiftBox } = useStore();
 
-  const [experiences, setExperiences] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [experiences, setExperiences] = useState(() => (DEMO ? FALLBACK_EXPS : []));
+  const [categories, setCategories] = useState(() => (DEMO ? FALLBACK_CATS : []));
+  const [loading, setLoading] = useState(() => !DEMO);
   const [activeCat, setActiveCat] = useState("all");
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -128,6 +128,8 @@ export default function Vau() {
 
   useEffect(() => {
     let alive = true;
+    // Demo build has no server — the bundled catalog is used via lazy state init.
+    if (DEMO) return () => { alive = false; };
     (async () => {
       setLoading(true);
       try {
