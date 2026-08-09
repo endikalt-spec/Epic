@@ -11,6 +11,7 @@ import {
 import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
+import LegalView from "./LegalView";
 import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe } from "./api";
 const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
 
@@ -114,6 +115,7 @@ export default function Vau() {
   const [voucher, setVoucher] = useState(null);
   const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [legalDoc, setLegalDoc] = useState("terms");
 
   const loc = (obj, field) => obj?.[`${field}_${lang}`] ?? obj?.[`${field}_he`] ?? "";
 
@@ -219,6 +221,7 @@ export default function Vau() {
 
   const goRedeem = () => { setView("redeem"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
   const goExchange = () => { setView("exchange"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
+  const goLegal = (docType) => { setLegalDoc(docType); setView("legal"); setMenuOpen(false); window.scrollTo(0, 0); };
   const goHome = () => { setView("home"); window.scrollTo(0, 0); };
   const changeLang = (l) => i18n.changeLanguage(l);
 
@@ -227,6 +230,9 @@ export default function Vau() {
   }
   if (view === "exchange") {
     return <ExchangeView goHome={goHome} goRedeem={goRedeem} experiences={experiences.length ? experiences : FALLBACK_EXPS} loc={loc} t={t} rtl={rtl} />;
+  }
+  if (view === "legal") {
+    return <LegalView doc={legalDoc} setDoc={setLegalDoc} goHome={goHome} lang={lang} t={t} rtl={rtl} />;
   }
 
   return (
@@ -261,7 +267,7 @@ export default function Vau() {
 
       <Newsletter t={t} />
 
-      <Footer t={t} lang={lang} goRedeem={goRedeem} />
+      <Footer t={t} lang={lang} goRedeem={goRedeem} goLegal={goLegal} />
 
       {/* Gift box drawer */}
       <GiftDrawer
@@ -823,9 +829,14 @@ function Newsletter({ t }) {
 
 /* ─────────────────────────── FOOTER ─────────────────────────── */
 
-function Footer({ t, lang, goRedeem }) {
+function Footer({ t, lang, goRedeem, goLegal }) {
   const explore = ["nav_experiences", "nav_how", "nav_reviews", "nav_business"];
-  const support = ["footer_faq", "footer_terms", "footer_privacy", "footer_contact"];
+  const support = [
+    { key: "footer_faq", href: "#how" },
+    { key: "footer_terms", action: () => goLegal("terms") },
+    { key: "footer_privacy", action: () => goLegal("privacy") },
+    { key: "footer_contact", href: "#business" },
+  ];
   return (
     <footer className="bg-ink-900 text-cream-300 mt-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-14 grid gap-10 md:grid-cols-4">
@@ -850,8 +861,14 @@ function Footer({ t, lang, goRedeem }) {
         <div>
           <h4 className="font-display font-bold text-white mb-4">{t("footer_support")}</h4>
           <ul className="space-y-2.5">
-            {support.map((k) => (
-              <li key={k}><a href="#" className="hover:text-coral-400 transition-colors">{t(k)}</a></li>
+            {support.map((s) => (
+              <li key={s.key}>
+                {s.action ? (
+                  <button onClick={s.action} className="hover:text-coral-400 transition-colors">{t(s.key)}</button>
+                ) : (
+                  <a href={s.href} className="hover:text-coral-400 transition-colors">{t(s.key)}</a>
+                )}
+              </li>
             ))}
           </ul>
         </div>

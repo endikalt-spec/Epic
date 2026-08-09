@@ -65,7 +65,7 @@ const config = {
 
   // ── Fraud / anti-abuse ──
   fraud: {
-    voucherValidityDays: Number(process.env.VOUCHER_VALIDITY_DAYS || 730), // ~2 years
+    voucherValidityDays: Number(process.env.VOUCHER_VALIDITY_DAYS || 1826), // ≥5 years (Israeli Consumer Protection Law)
     maxActivationAttemptsPerHour: Number(process.env.MAX_ACTIVATION_ATTEMPTS || 10),
   },
 };

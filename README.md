@@ -219,6 +219,10 @@ Beyond the storefront, VAU ships a commerce/identity scaffold that runs in
 - **AI gift assistant** — a chat concierge that recommends experiences from the
   catalog. Uses **Anthropic Claude** when `ANTHROPIC_API_KEY` is set; a
   deterministic recommender otherwise.
+- **Legal pages** — original Terms of Use and Privacy Policy drafts (Hebrew +
+  Russian) tailored to Israeli law (`frontend/src/legal.js`), linked from the
+  footer. They are **templates with placeholders** and carry an on-page notice
+  to have a licensed Israeli attorney review them before publishing.
 
 Copy `backend/.env.example` to `backend/.env` and fill in only the providers you
 want to enable — everything else stays in demo mode.
