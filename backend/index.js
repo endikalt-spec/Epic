@@ -155,11 +155,11 @@ app.post('/api/checkout', async (req, res) => {
         'INSERT INTO payments (provider,provider_ref,amount,currency,method,status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
         [gateway.name, payment.id, amount, config.payments.currency, method, 'succeeded']);
       await db.query(
-        `INSERT INTO vouchers (code,token,signature,type,status,recipient_ref,recipient_email,recipient_name,buyer_email,buyer_user_id,payment_id,option_ids,expires_at)
-         VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12)`,
+        `INSERT INTO vouchers (code,token,signature,type,status,recipient_ref,recipient_email,recipient_name,buyer_email,buyer_user_id,payment_id,option_ids,face_value,expires_at)
+         VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [voucher.code, voucher.token, voucher.signature, voucher.type, voucher.recipientRef,
          recipient?.email || null, recipient?.name || null, deliverTo, req.user?.sub || null,
-         p.rows[0].id, experienceIds, voucher.expiresAt]);
+         p.rows[0].id, experienceIds, amount, voucher.expiresAt]);
     });
 
     // 4) Email the e-voucher.
@@ -198,7 +198,9 @@ app.post('/api/vouchers/activate', async (req, res) => {
   const options = await dbSafe(() => db.query(
     'SELECT e.*, c.slug AS category_slug FROM experiences e LEFT JOIN categories c ON e.category_id=c.id WHERE e.id = ANY($1)',
     [row.option_ids]).then((r) => r.rows), []);
-  res.json({ ok: true, type: row.type, options });
+  // Monetary value the voucher can be exchanged against.
+  const faceValue = Number(row.face_value) || Math.max(0, ...options.map((o) => Number(o.price)));
+  res.json({ ok: true, type: row.type, options, faceValue });
 });
 
 // ─────────────────────────── VOUCHER REDEEM (single-use, atomic) ───────────────────────────
@@ -227,6 +229,60 @@ app.post('/api/vouchers/redeem', async (req, res) => {
   await dbSafe(() => db.query('INSERT INTO redemption_attempts (code,ip,result) VALUES ($1,$2,$3)', [code, ip, done ? 'ok' : 'already_redeemed']));
   if (!done) return res.status(409).json({ error: 'already_redeemed' });
   res.json({ success: true });
+});
+
+// ─────────────────────────── VOUCHER EXCHANGE (swap / upgrade with top-up) ───────────────────────────
+// The recipient swaps their gifted experience for a different one. If the new
+// experience costs more, they pay the difference; the voucher is then re-pointed
+// to the new experience. Pass quoteOnly:true to preview the top-up without charging.
+app.post('/api/vouchers/exchange', async (req, res) => {
+  const { code, experienceId, token, signature, recipient, method = 'card', cardLast4, quoteOnly } = req.body || {};
+  const ip = clientIp(req);
+  if (fraud.tooManyAttempts(`exchange:${ip}`)) return res.status(429).json({ error: 'Too many attempts. Try later.' });
+
+  const row = await dbSafe(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]), undefined);
+  if (row === undefined) return res.status(503).json({ error: 'DB unavailable' });
+
+  const check = fraud.validateRedemption(row, { token, signature, recipient });
+  if (!check.ok) return res.status(check.reason === 'not_found' ? 404 : 400).json({ error: check.reason });
+
+  const target = await dbSafe(() => db.query('SELECT id, price FROM experiences WHERE id = $1', [experienceId]).then((r) => r.rows[0]), undefined);
+  if (target === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  if (!target) return res.status(400).json({ error: 'experience_not_found' });
+
+  // Face value = what the voucher is worth today; top-up covers any upgrade gap.
+  let faceValue = Number(row.face_value);
+  if (!faceValue) {
+    faceValue = await dbSafe(() => db.query('SELECT COALESCE(MAX(price),0) AS v FROM experiences WHERE id = ANY($1)', [row.option_ids]).then((r) => Number(r.rows[0].v)), 0);
+  }
+  const newPrice = Number(target.price);
+  const topUp = Math.max(0, newPrice - faceValue);
+
+  // Quote only — no charge, no mutation.
+  if (quoteOnly) return res.json({ ok: true, faceValue, newPrice, topUp, currency: config.payments.currency });
+
+  // Charge the difference (if any). Honest: only proceed on a real success.
+  let payment = null;
+  if (topUp > 0) {
+    if (!SUPPORTED_METHODS.includes(method)) return res.status(400).json({ error: 'Unsupported payment method' });
+    payment = await getGateway().createPayment({ amount: topUp, method, metadata: { cardLast4, exchange: code } });
+    if (payment.status !== 'succeeded') return res.status(402).json({ error: 'Payment not completed', status: payment.status });
+  }
+
+  // Atomically re-point the voucher to the new experience (only while still active).
+  const newFace = Math.max(faceValue, newPrice);
+  const done = await dbSafe(() => db.query(
+    `UPDATE vouchers SET option_ids = ARRAY[$2]::int[], face_value = $3 WHERE code = $1 AND status = 'active' RETURNING id`,
+    [code, experienceId, newFace]).then((r) => r.rows[0]), undefined);
+  if (done === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  if (!done) return res.status(409).json({ error: 'not_exchangeable' });
+
+  if (payment) await dbSafe(() => db.query(
+    'INSERT INTO payments (provider,provider_ref,amount,currency,method,status) VALUES ($1,$2,$3,$4,$5,$6)',
+    [getGateway().name, payment.id, topUp, config.payments.currency, method, 'succeeded']));
+  await dbSafe(() => db.query('INSERT INTO redemption_attempts (code,ip,result) VALUES ($1,$2,$3)', [code, ip, 'exchanged']));
+
+  res.json({ ok: true, charged: topUp, faceValue: newFace, newExperienceId: experienceId });
 });
 
 // ─────────────────────────── AI GIFT ASSISTANT ───────────────────────────

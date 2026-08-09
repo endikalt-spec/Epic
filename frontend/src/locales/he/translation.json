@@ -169,5 +169,23 @@
   "email_sent_to": "נשלח אל",
   "redeem_recipient_email": "אימייל המקבל (לשובר שמי)",
 
+  "nav_exchange": "החלפת שובר",
+  "exchange_title": "החלפת שובר",
+  "exchange_intro": "קיבלתם שובר? החליפו אותו לחוויה אחרת — ואם היא יקרה יותר, פשוט משלימים את ההפרש ומשדרגים.",
+  "exchange_lookup": "מצא את השובר",
+  "exchange_value": "ערך השובר",
+  "exchange_choose": "בחרו חוויה חדשה",
+  "exchange_choose_hint": "המחיר שמעבר לערך השובר יתווסף כתשלום",
+  "exchange_new_price": "מחיר החוויה",
+  "exchange_topup": "תוספת לתשלום",
+  "exchange_covered": "מכוסה במלואו בשובר — ללא תוספת",
+  "exchange_pay": "שלמו והחליפו",
+  "exchange_confirm": "אשרו החלפה",
+  "exchange_done_title": "השובר הוחלף! 🎉",
+  "exchange_done_text": "השובר שלכם עודכן לחוויה החדשה. עכשיו אפשר לממש אותו כרגיל.",
+  "exchange_error": "ההחלפה נכשלה. נסו שוב.",
+  "exchange_go_redeem": "למימוש השובר",
+  "exchange_back": "בחירת חוויה אחרת",
+
   "select": "בחירה"
 }

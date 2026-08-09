@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
     payment_id INTEGER REFERENCES payments(id),
     option_ids INTEGER[] DEFAULT '{}',         -- experiences the recipient can choose from
     selected_experience_id INTEGER REFERENCES experiences(id),
+    face_value INTEGER DEFAULT 0,              -- monetary value the voucher can be exchanged against
     expires_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     redeemed_at TIMESTAMP

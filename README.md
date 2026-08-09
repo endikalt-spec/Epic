@@ -210,6 +210,9 @@ Beyond the storefront, VAU ships a commerce/identity scaffold that runs in
 - **E-vouchers** — on purchase the buyer receives a digital voucher by email with
   a **QR code** and a **Code128 barcode**. Vouchers are **personalized (именной)**
   or **bearer (неименной)**.
+- **Voucher exchange** — the recipient can swap the gifted experience for a
+  different one (e.g. a ₪450 spa night → a ₪1,490 chef-at-home) and **pay only the
+  difference**; the voucher is atomically re-pointed to the new experience.
 - **Anti-fraud** — HMAC-signed codes (forgery-proof offline), per-IP velocity
   limits, single-use **atomic** redemption (no double-spend), recipient binding
   for personalized vouchers, and an audit trail.

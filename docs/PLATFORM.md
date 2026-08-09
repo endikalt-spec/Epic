@@ -85,7 +85,27 @@ scanned QR link and, for personalized vouchers, asks for the recipient email.
 > Apple `id_token` signatures, add webhook-driven payment reconciliation, and
 > consider binding personalized redemption to a signed-in account.
 
-## 6. AI Gift Assistant
+## 6. Voucher exchange (swap / upgrade with top-up)
+
+The recipient can swap the gifted experience for a different one — e.g. a
+₪450 spa night → a ₪1,490 private-chef-at-home. Flow (`ExchangeView` +
+`/api/vouchers/exchange`):
+
+1. Enter the code (recipient email too, for personalized vouchers) → the backend
+   validates the voucher and returns its **face value**.
+2. Pick a new experience from the catalog; each card shows the **top-up**
+   (`max(0, newPrice − faceValue)`).
+3. If there's a difference, pay it via the gateway (card / Apple Pay / Google Pay).
+4. The voucher is **atomically re-pointed** to the new experience and its face
+   value bumped; it's then redeemed as usual.
+
+Honest by construction: the swap is committed only after the top-up charge
+actually succeeds, and the update runs `WHERE status='active'` so a redeemed
+voucher can't be exchanged. `quoteOnly: true` previews the top-up without
+charging. A cheaper target incurs no top-up (the extra credit is retained as
+face value, not refunded).
+
+## 7. AI Gift Assistant
 
 - **Frontend:** `AiAssistant.jsx` — a floating concierge. The buyer describes the
   recipient; the assistant recommends experiences **from VAU's own catalog** and
@@ -113,5 +133,6 @@ POST /api/payments/webhook                 (raw body; Stripe signature)
 POST /api/checkout                         { experienceIds, method, recipient, buyerEmail, voucherType, cardLast4 }
 POST /api/vouchers/activate                { code, token?, signature?, recipient? }
 POST /api/vouchers/redeem                  { code, experienceId, token?, signature?, recipient? }
+POST /api/vouchers/exchange                { code, experienceId, method, cardLast4?, quoteOnly?, token?, signature?, recipient? }
 POST /api/assistant                        { messages, recipient?, catalog, lang }
 ```

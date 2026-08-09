@@ -11,7 +11,7 @@ import {
 import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
-import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, getMe } from "./api";
+import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe } from "./api";
 const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
@@ -218,11 +218,15 @@ export default function Vau() {
   };
 
   const goRedeem = () => { setView("redeem"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
+  const goExchange = () => { setView("exchange"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
   const goHome = () => { setView("home"); window.scrollTo(0, 0); };
   const changeLang = (l) => i18n.changeLanguage(l);
 
   if (view === "redeem") {
     return <RedeemView goHome={goHome} loc={loc} t={t} rtl={rtl} />;
+  }
+  if (view === "exchange") {
+    return <ExchangeView goHome={goHome} goRedeem={goRedeem} experiences={experiences.length ? experiences : FALLBACK_EXPS} loc={loc} t={t} rtl={rtl} />;
   }
 
   return (
@@ -230,7 +234,7 @@ export default function Vau() {
       <Header
         {...{ t, lang, scrolled,
           giftCount: giftBox.length, openDrawer: () => setDrawerOpen(true),
-          goRedeem, changeLang, menuOpen, setMenuOpen,
+          goRedeem, goExchange, changeLang, menuOpen, setMenuOpen,
           user, onSignIn: () => setLoginOpen(true), onSignOut: signOut }}
       />
 
@@ -300,10 +304,11 @@ export default function Vau() {
 
 /* ─────────────────────────── HEADER ─────────────────────────── */
 
-function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang, menuOpen, setMenuOpen, user, onSignIn, onSignOut }) {
+function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange, changeLang, menuOpen, setMenuOpen, user, onSignIn, onSignOut }) {
   const links = [
     { key: "nav_experiences", href: "#catalog" },
     { key: "nav_how", href: "#how" },
+    { key: "nav_exchange", action: goExchange },
     { key: "nav_reviews", href: "#reviews" },
     { key: "nav_business", href: "#business" },
   ];
@@ -317,9 +322,15 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang
           </a>
           <nav className="hidden lg:flex items-center gap-1">
             {links.map((l) => (
-              <a key={l.key} href={l.href} className="px-3 py-2 text-sm font-bold text-ink-600 hover:text-coral-600 transition-colors rounded-lg">
-                {t(l.key)}
-              </a>
+              l.action ? (
+                <button key={l.key} onClick={l.action} className="px-3 py-2 text-sm font-bold text-ink-600 hover:text-coral-600 transition-colors rounded-lg">
+                  {t(l.key)}
+                </button>
+              ) : (
+                <a key={l.key} href={l.href} className="px-3 py-2 text-sm font-bold text-ink-600 hover:text-coral-600 transition-colors rounded-lg">
+                  {t(l.key)}
+                </a>
+              )
             ))}
           </nav>
         </div>
@@ -378,9 +389,15 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, changeLang
             </div>
             <nav className="flex flex-col gap-1">
               {links.map((l) => (
-                <a key={l.key} href={l.href} onClick={() => setMenuOpen(false)} className="px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
-                  {t(l.key)}
-                </a>
+                l.action ? (
+                  <button key={l.key} onClick={() => { setMenuOpen(false); l.action(); }} className="text-start px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
+                    {t(l.key)}
+                  </button>
+                ) : (
+                  <a key={l.key} href={l.href} onClick={() => setMenuOpen(false)} className="px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
+                    {t(l.key)}
+                  </a>
+                )
               ))}
               <button onClick={goRedeem} className="mt-2 flex items-center gap-2 px-3 py-3 text-lg font-bold text-coral-600">
                 <Ticket size={20} /> {t("redeem_voucher")}
@@ -1062,6 +1079,169 @@ function ExperienceModal({ exp, close, t, loc, add, added, boxFull }) {
 
 // Read QR-link params once at module load (client-only SPA).
 const REDEEM_PARAMS = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+
+/* ─────────────────────────── EXCHANGE VIEW (swap / upgrade a voucher) ─────────────────────────── */
+
+function ExchangeView({ goHome, goRedeem, experiences, loc, t, rtl }) {
+  const [step, setStep] = useState(0); // 0 code, 1 pick, 2 confirm/pay, 3 done
+  const [code, setCode] = useState(() => (REDEEM_PARAMS.get("code") || "").toUpperCase());
+  const [token] = useState(() => REDEEM_PARAMS.get("t") || "");
+  const [signature] = useState(() => REDEEM_PARAMS.get("s") || "");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [faceValue, setFaceValue] = useState(0);
+  const [target, setTarget] = useState(null);
+  const [method, setMethod] = useState("card");
+  const [cardLast4, setCardLast4] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const recipient = recipientEmail ? { email: recipientEmail } : undefined;
+  const topUp = target ? Math.max(0, Number(target.price) - faceValue) : 0;
+  const methods = [["card", t("pay_card"), CreditCard], ["apple_pay", "Apple Pay", Smartphone], ["google_pay", "Google Pay", Smartphone]];
+
+  const lookup = async (e) => {
+    e?.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true); setError("");
+    try {
+      const res = await activateVoucher({ code: code.trim(), token: token || undefined, signature: signature || undefined, recipient });
+      setFaceValue(Number(res.faceValue) || 0);
+      setStep(1);
+    } catch (err) {
+      const reason = err?.response?.data?.error;
+      setError(reason === "recipient_mismatch" ? t("redeem_recipient_email") : t("redeem_error"));
+    } finally { setLoading(false); }
+  };
+
+  const confirm = async () => {
+    if (!target) return;
+    setLoading(true); setError("");
+    try {
+      // Server recomputes the top-up and charges the difference; only advances on success.
+      await exchangeVoucher({ code: code.trim(), experienceId: target.id, token: token || undefined, signature: signature || undefined, recipient, method, cardLast4: cardLast4 || undefined });
+      setStep(3);
+    } catch {
+      setError(t("exchange_error"));
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen mesh-warm">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-10">
+        <button onClick={goHome} className="inline-flex items-center gap-2 text-sm font-bold text-ink-500 hover:text-coral-600 mb-8">
+          {rtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />} {t("back_home")}
+        </button>
+        <div className="flex items-center gap-2 mb-6">
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold">V</span>
+          <span className="font-display text-2xl font-extrabold">VAU</span>
+        </div>
+
+        {step === 0 && (
+          <form onSubmit={lookup} className="bg-white rounded-3xl shadow-lift p-8 sm:p-10 max-w-xl mx-auto animate-rise text-center">
+            <div className="inline-grid place-items-center h-16 w-16 rounded-2xl bg-coral-50 text-coral-500 mb-5"><RefreshCw size={28} /></div>
+            <h1 className="font-display text-3xl font-extrabold mb-2">{t("exchange_title")}</h1>
+            <p className="text-ink-500 mb-7">{t("exchange_intro")}</p>
+            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t("redeem_code_placeholder")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-5 text-center text-2xl font-display font-extrabold tracking-widest text-ink-900 outline-none focus:ring-2 focus:ring-coral-400 mb-3 placeholder:text-ink-300 placeholder:tracking-normal" />
+            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder={t("redeem_recipient_email")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-3.5 text-center text-sm outline-none focus:ring-2 focus:ring-coral-300 mb-3 placeholder:text-ink-300" />
+            {error && <p className="text-coral-600 text-sm font-semibold mb-3">{error}</p>}
+            <Btn type="submit" variant="primary" size="lg" className="w-full" loading={loading}>{t("exchange_lookup")}</Btn>
+          </form>
+        )}
+
+        {step === 1 && (
+          <div className="animate-rise">
+            <div className="bg-white rounded-2xl shadow-soft p-4 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-ink-700"><Ticket size={18} className="text-coral-500" /> {code}</div>
+              <div className="text-end">
+                <div className="text-[11px] font-bold text-ink-400">{t("exchange_value")}</div>
+                <div className="font-display text-xl font-extrabold text-teal-600">{nis(faceValue)}</div>
+              </div>
+            </div>
+            <h2 className="font-display text-2xl font-extrabold mb-1">{t("exchange_choose")}</h2>
+            <p className="text-ink-500 text-sm mb-5">{t("exchange_choose_hint")}</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {experiences.map((exp) => {
+                const up = Math.max(0, Number(exp.price) - faceValue);
+                return (
+                  <button key={exp.id} onClick={() => { setTarget(exp); setError(""); setStep(2); }}
+                    className="group flex items-center gap-3 bg-white rounded-2xl shadow-soft hover:shadow-lift p-3 text-start transition-all hover:-translate-y-0.5">
+                    <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0"><SmartImg src={exp.img} alt="" emoji={exp.emoji} tint={exp.tint} className="w-full h-full" /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-bold text-ink-900 truncate">{loc(exp, "title")}</div>
+                      <div className="font-display font-extrabold text-coral-600">{nis(exp.price)}</div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-extrabold ${up > 0 ? "bg-sun-400 text-ink-900" : "bg-teal-500 text-white"}`}>
+                      {up > 0 ? `+${nis(up)}` : "✓"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && target && (
+          <div className="max-w-xl mx-auto animate-rise">
+            <button onClick={() => setStep(1)} className="inline-flex items-center gap-2 text-sm font-bold text-ink-500 hover:text-coral-600 mb-4">
+              {rtl ? <ArrowRight size={16} /> : <ArrowLeft size={16} />} {t("exchange_back")}
+            </button>
+            <div className="bg-white rounded-3xl shadow-lift p-6 sm:p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-20 w-20 rounded-2xl overflow-hidden shrink-0"><SmartImg src={target.img} alt="" emoji={target.emoji} tint={target.tint} className="w-full h-full" /></div>
+                <div>
+                  <div className="font-display text-xl font-extrabold">{loc(target, "title")}</div>
+                  <Stars rating={target.rating} count={target.reviews_count} />
+                </div>
+              </div>
+              <div className="space-y-2 text-sm border-t border-cream-200 pt-4">
+                <div className="flex justify-between"><span className="text-ink-500">{t("exchange_value")}</span><span className="font-bold">{nis(faceValue)}</span></div>
+                <div className="flex justify-between"><span className="text-ink-500">{t("exchange_new_price")}</span><span className="font-bold">{nis(target.price)}</span></div>
+                <div className="flex justify-between text-base pt-2 border-t border-cream-200">
+                  <span className="font-extrabold text-ink-900">{t("exchange_topup")}</span>
+                  <span className="font-display font-extrabold text-coral-600">{topUp > 0 ? nis(topUp) : t("exchange_covered")}</span>
+                </div>
+              </div>
+              {topUp > 0 && (
+                <div className="mt-5">
+                  <div className="grid grid-cols-3 gap-2">
+                    {methods.map(([val, label, Icon]) => (
+                      <button key={val} onClick={() => setMethod(val)}
+                        className={`rounded-xl px-2 py-2.5 text-[11px] font-bold border flex flex-col items-center gap-1 transition-all ${method === val ? "bg-ink-900 text-white border-ink-900" : "bg-white text-ink-600 border-cream-300 hover:border-coral-300"}`}>
+                        <Icon size={16} /> {label}
+                      </button>
+                    ))}
+                  </div>
+                  {method === "card" && (
+                    <input value={cardLast4} onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="•••• •••• •••• 1234"
+                      className="w-full mt-2 rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                  )}
+                </div>
+              )}
+              {error && <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center mt-4">{error}</p>}
+              <Btn variant="primary" size="lg" className="w-full mt-5" loading={loading} onClick={confirm}>
+                {topUp > 0 ? `${t("exchange_pay")} · ${nis(topUp)}` : t("exchange_confirm")}
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="max-w-xl mx-auto bg-white rounded-3xl shadow-lift p-8 sm:p-12 text-center animate-pop">
+            <div className="text-6xl mb-5">🎉</div>
+            <h2 className="font-display text-3xl font-extrabold mb-3">{t("exchange_done_title")}</h2>
+            <p className="text-ink-500 mb-8">{t("exchange_done_text")}</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Btn variant="primary" size="lg" onClick={goRedeem}>{t("exchange_go_redeem")}</Btn>
+              <Btn variant="ghost" size="lg" onClick={goHome}>{t("back_home")}</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function RedeemView({ goHome, loc, t, rtl }) {
   const [step, setStep] = useState(0); // 0 enter code, 1 choose, 2 done

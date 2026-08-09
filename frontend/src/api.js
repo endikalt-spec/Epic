@@ -24,6 +24,7 @@ export const getPaymentConfig = () => api.get("/payments/config").then((r) => r.
 export const checkout = (payload) => api.post("/checkout", payload).then((r) => r.data);
 export const activateVoucher = (payload) => api.post("/vouchers/activate", payload).then((r) => r.data);
 export const redeemVoucher = (payload) => api.post("/vouchers/redeem", payload).then((r) => r.data);
+export const exchangeVoucher = (payload) => api.post("/vouchers/exchange", payload).then((r) => r.data);
 
 // ── Assistant ──
 export const askAssistant = (payload) => api.post("/assistant", payload).then((r) => r.data);
