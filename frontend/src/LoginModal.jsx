@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 import { getAuthProviders, loginDemo, providerStartUrl } from "./api";
+import { LOGO_WORDMARK } from "./logo";
 
 // Sign in with Google / Apple. Real OAuth redirects when the provider is
 // configured on the backend; otherwise a one-tap demo login is used.
@@ -46,9 +47,8 @@ export default function LoginModal({ open, onClose, onLogin, t }) {
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm" />
       <div className="relative bg-cream-50 w-full max-w-sm rounded-3xl p-8 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-5 end-5 grid place-items-center h-9 w-9 rounded-full bg-white shadow-soft"><X size={18} /></button>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold">V</span>
-          <span className="font-display text-2xl font-extrabold">VAU</span>
+        <div className="mb-3">
+          <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
         </div>
         <h2 className="font-display text-xl font-extrabold mb-1">{t("login_title")}</h2>
         <p className="text-sm text-ink-500 mb-6">{t("login_subtitle")}</p>

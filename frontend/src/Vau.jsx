@@ -12,6 +12,7 @@ import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
+import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
 import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
 const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
 
@@ -349,9 +350,8 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
     <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? "bg-cream-50/90 backdrop-blur-xl shadow-soft" : "bg-transparent"}`}>
       <div className="mx-auto max-w-7xl px-4 sm:px-6 h-18 py-3.5 flex items-center justify-between gap-4">
         <div className="flex items-center gap-8">
-          <a href="#top" className="flex items-center gap-2 select-none">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold text-lg shadow-lift">V</span>
-            <span className="font-display text-2xl font-extrabold tracking-tight text-ink-900">VAU</span>
+          <a href="#top" className="flex items-center select-none">
+            <img src={LOGO_WORDMARK} alt="VAU" className="h-8 sm:h-9 w-auto" />
           </a>
           <nav className="hidden lg:flex items-center gap-1">
             {links.map((l) => (
@@ -417,7 +417,7 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
         <div className="lg:hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
           <div className="absolute top-0 inset-x-0 bg-cream-50 rounded-b-3xl p-6 shadow-pop animate-rise" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
-              <span className="font-display text-xl font-extrabold">VAU</span>
+              <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
               <button onClick={() => setMenuOpen(false)} className="grid place-items-center h-10 w-10 rounded-full bg-white shadow-soft"><X size={20} /></button>
             </div>
             <nav className="flex flex-col gap-1">
@@ -454,6 +454,7 @@ function Hero({ t, experiences }) {
       <div className="absolute -top-24 -start-24 w-96 h-96 rounded-full bg-coral-300/30 blur-3xl pointer-events-none" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center relative">
         <div className="animate-rise text-center lg:text-start">
+          <img src={LOGO_FULL} alt="VAU — the gift that lasts a lifetime" className="h-28 sm:h-32 w-auto mx-auto lg:mx-0 mb-6" />
           <Pill className="bg-white text-coral-600 shadow-soft mb-6">
             <Sparkles size={13} /> {t("hero_badge")}
           </Pill>
@@ -1022,9 +1023,8 @@ function Footer({ t, lang, goRedeem, goLegal }) {
     <footer className="bg-ink-900 text-cream-300 mt-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-14 grid gap-10 md:grid-cols-4">
         <div className="md:col-span-2 max-w-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold text-lg">V</span>
-            <span className="font-display text-2xl font-extrabold text-white">VAU</span>
+          <div className="mb-4">
+            <img src={LOGO_LIGHT} alt="VAU — the gift that lasts a lifetime" className="h-24 w-auto" />
           </div>
           <p className="leading-relaxed text-cream-300/80">{t("footer_about")}</p>
           <button onClick={goRedeem} className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-coral-500 px-5 py-3 font-bold text-white transition-colors">
@@ -1405,8 +1405,7 @@ function ExchangeView({ goHome, goRedeem, experiences, loc, t, rtl }) {
           {rtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />} {t("back_home")}
         </button>
         <div className="flex items-center gap-2 mb-6">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold">V</span>
-          <span className="font-display text-2xl font-extrabold">VAU</span>
+          <img src={LOGO_WORDMARK} alt="VAU" className="h-9 w-auto" />
         </div>
 
         {step === 0 && (
@@ -1569,8 +1568,7 @@ function RedeemView({ goHome, loc, t, rtl }) {
         </button>
 
         <div className="flex items-center gap-2 mb-8">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold">V</span>
-          <span className="font-display text-2xl font-extrabold">VAU</span>
+          <img src={LOGO_WORDMARK} alt="VAU" className="h-9 w-auto" />
         </div>
 
         {step === 0 && (

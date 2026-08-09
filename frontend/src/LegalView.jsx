@@ -1,5 +1,6 @@
 import { ArrowLeft, ArrowRight, AlertTriangle } from "lucide-react";
 import { LEGAL } from "./legal";
+import { LOGO_WORDMARK } from "./logo";
 
 // Renders the Terms / Privacy documents with a tab switcher. Content and
 // language come from legal.js.
@@ -18,9 +19,8 @@ export default function LegalView({ doc, setDoc, goHome, lang, t, rtl }) {
           <button onClick={goHome} className="inline-flex items-center gap-2 text-sm font-bold text-ink-500 hover:text-coral-600 mb-8">
             {rtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />} {t("back_home")}
           </button>
-          <div className="flex items-center gap-2 mb-6">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-coral-400 to-coral-600 text-white font-display font-extrabold">V</span>
-            <span className="font-display text-2xl font-extrabold">VAU</span>
+          <div className="mb-6">
+            <img src={LOGO_WORDMARK} alt="VAU" className="h-9 w-auto" />
           </div>
           <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink-900">{d.title}</h1>
           <p className="text-ink-500 mt-2">{d.updated}</p>
