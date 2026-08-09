@@ -221,7 +221,7 @@ Beyond the storefront, VAU ships a commerce/identity scaffold that runs in
   deterministic recommender otherwise.
 - **Customers, consent & CRM** — a built-in customer/orders/consent store (our
   Postgres is the system of record) plus a pluggable external CRM/ESP connector
-  (`crm.js`: `log` demo → **Brevo** / **HubSpot**). Buying a voucher requires
+  (`crm.js`: `log` demo → **Brevo** / **HubSpot** / **ActiveTrail**). Buying a voucher requires
   accepting Terms + Privacy and captures an **auditable consent trail**
   (timestamp, IP, policy version) with an explicit, revocable marketing opt-in —
   as required by Israeli anti-spam & privacy law. A token-protected `/api/admin/*`

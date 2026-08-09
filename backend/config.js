@@ -74,6 +74,10 @@ const config = {
     hubspot: {
       token: process.env.HUBSPOT_TOKEN || '',
     },
+    activetrail: {
+      token: process.env.ACTIVETRAIL_TOKEN || '',
+      groupId: process.env.ACTIVETRAIL_GROUP_ID || '',
+    },
   },
 
   // ── AI gift assistant ──
@@ -100,7 +104,8 @@ config.isDemo = {
   crm:
     config.crm.provider === 'log' ||
     (config.crm.provider === 'brevo' && !config.crm.brevo.apiKey) ||
-    (config.crm.provider === 'hubspot' && !config.crm.hubspot.token),
+    (config.crm.provider === 'hubspot' && !config.crm.hubspot.token) ||
+    (config.crm.provider === 'activetrail' && !config.crm.activetrail.token),
 };
 
 module.exports = config;

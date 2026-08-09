@@ -136,8 +136,11 @@ correctly for Israeli law — without building a CRM UI from scratch.
 - **A ready-made CRM/ESP is the engagement layer** (campaigns, segments,
   newsletters), connected through `crm.js` — the same demo→real pattern as the
   payment gateway. Default provider is `log` (prints intended syncs, no keys);
-  set `CRM_PROVIDER=brevo` (recommended for Israel) or `hubspot` with an API key
-  to go live. CRM sync is fire-and-forget and **never blocks or breaks checkout**.
+  set `CRM_PROVIDER` to `brevo` (recommended starter), `hubspot`, or
+  `activetrail` (Israeli platform, native Hebrew/RTL email+SMS) with the matching
+  API key to go live. CRM sync is fire-and-forget and **never blocks or breaks
+  checkout**. Adding another provider = one more adapter in `crm.js`; the
+  checkout code is untouched.
 
 **What happens on purchase** (`customers.recordPurchase`, one DB transaction):
 1. Upsert the customer (`users`) — a logged-in buyer is keyed by their auth id;

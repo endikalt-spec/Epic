@@ -125,10 +125,64 @@ function hubspotAdapter() {
   };
 }
 
+// ─────────────────────────── ACTIVETRAIL ADAPTER ───────────────────────────
+// Israeli email/SMS marketing platform with native Hebrew/RTL. REST API base
+// https://webapi.mymarketing.co.il/api ; the API token is passed verbatim in the
+// Authorization header (ActiveTrail's scheme — no "Bearer" prefix).
+// Docs: https://webapi.mymarketing.co.il/api/docs/Guides
+// NOTE: the members-endpoint body shape can vary between API versions; if your
+// account rejects it, check the current docs and adjust addToGroup() — the
+// contact upsert itself follows the documented POST /contacts contract.
+function activetrailAdapter() {
+  const { token, groupId } = config.crm.activetrail;
+  const call = (path, method, body) =>
+    fetch('https://webapi.mymarketing.co.il/api' + path, {
+      method,
+      headers: { Authorization: token, 'Content-Type': 'application/json', accept: 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+  async function upsert(customer) {
+    if (!customer.email) return;
+    const [first, ...rest] = String(customer.name || '').split(' ');
+    // POST /contacts creates or updates the contact keyed by email.
+    const res = await call('/contacts', 'POST', {
+      email: customer.email,
+      first_name: first || '',
+      last_name: rest.join(' ') || '',
+      phone_number: customer.phone || '',
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.error('[crm:activetrail] upsert failed', res.status, txt);
+      return;
+    }
+    // Marketing consent maps to membership of the marketing group/list: opt-in
+    // adds them, opt-out simply skips (unsubscribe is a separate AT endpoint).
+    if (groupId && customer.marketingOptIn) await addToGroup(customer.email);
+  }
+
+  async function addToGroup(email) {
+    const res = await call(`/groups/${groupId}/members`, 'POST', { email });
+    if (!res.ok && res.status !== 409) {
+      const txt = await res.text().catch(() => '');
+      console.error('[crm:activetrail] addToGroup failed', res.status, txt);
+    }
+  }
+
+  return {
+    name: 'activetrail',
+    identify: (customer) => upsert(customer),
+    trackPurchase: (order) => upsert({ email: order.email, name: order.buyerName, phone: order.phone }),
+    updateConsent: (customer, { marketingOptIn }) => upsert({ ...customer, marketingOptIn }),
+  };
+}
+
 function pickAdapter() {
   const p = config.crm.provider;
   if (p === 'brevo' && config.crm.brevo.apiKey) return brevoAdapter();
   if (p === 'hubspot' && config.crm.hubspot.token) return hubspotAdapter();
+  if (p === 'activetrail' && config.crm.activetrail.token) return activetrailAdapter();
   return logAdapter;
 }
 
