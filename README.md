@@ -219,6 +219,11 @@ Beyond the storefront, VAU ships a commerce/identity scaffold that runs in
 - **AI gift assistant** — a chat concierge that recommends experiences from the
   catalog. Uses **Anthropic Claude** when `ANTHROPIC_API_KEY` is set; a
   deterministic recommender otherwise.
+- **Businesses, reviews & loyalty** — each experience is provided by a **partner
+  business** with its own profile block; customers **write reviews** (per
+  experience or general, persisted and moderatable); and a **VAU Club** loyalty
+  program gives **every 4th gift within a year 50% off** — computed server-side
+  and applied at checkout (the recipient still gets the full-value experience).
 - **Customers, consent & CRM** — a built-in customer/orders/consent store (our
   Postgres is the system of record) plus a pluggable external CRM/ESP connector
   (`crm.js`: `log` demo → **Brevo** / **HubSpot** / **ActiveTrail**). Buying a voucher requires

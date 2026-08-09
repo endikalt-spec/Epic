@@ -13,7 +13,18 @@ export const CATEGORIES = [
   { id: 6, slug: "workshops", name_he: "סדנאות",         name_ru: "Мастер-классы",  emoji: "🎨", img: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=900&q=80", tint: "from-teal-500 to-berry-600" }
 ];
 
-export const EXPERIENCES = [
+// Businesses / partners — each experience is provided by one of these. Keyed by
+// category slug in the fallback; the API returns the same shape as exp.business.
+export const BUSINESSES = {
+  extreme: { slug: "partner-extreme", name_he: "אדרנלין ישראל", name_ru: "Адреналин Израиль", description_he: "חברת אקסטרים מובילה עם מדריכים מוסמכים וציוד בטיחות מהשורה הראשונה.", description_ru: "Ведущая компания экстрим-впечатлений: сертифицированные инструкторы и снаряжение высшего класса.", location_he: "מרכז, צפון ודרום", location_ru: "Центр, север и юг", emoji: "🪂", since: 2011, rating: 4.9 },
+  flights: { slug: "partner-flights", name_he: "שמיים פתוחים", name_ru: "Открытое небо", description_he: "טיסות בלון, מצנחי רחיפה וחוויות אוויר בהובלת טייסים ותיקים.", description_ru: "Полёты на шарах, параглайдинг и воздушные впечатления с опытными пилотами.", location_he: "עמק יזרעאל והכרמל", location_ru: "Изреельская долина и Кармель", emoji: "🎈", since: 2014, rating: 5.0 },
+  spa: { slug: "partner-spa", name_he: "נווה שלווה", name_ru: "Оазис спокойствия", description_he: "רשת ספא בוטיק עם מטפלים מקצועיים, מרחבי מים חמים וטיפולים אישיים.", description_ru: "Сеть бутик-спа с профессиональными терапевтами, тёплыми бассейнами и индивидуальными процедурами.", location_he: "תל אביב, הרצליה, ים המלח", location_ru: "Тель-Авив, Герцлия, Мёртвое море", emoji: "🧖", since: 2009, rating: 4.8 },
+  gastro: { slug: "partner-gastro", name_he: "טעמים", name_ru: "Вкусы", description_he: "שפים פרטיים, יקבי בוטיק וחוויות קולינריות בשיתוף יצרנים מקומיים.", description_ru: "Частные шефы, бутиковые винодельни и кулинарные впечатления с местными производителями.", location_he: "הגליל, השרון ותל אביב", location_ru: "Галилея, Шарон и Тель-Авив", emoji: "🍷", since: 2015, rating: 4.8 },
+  romance: { slug: "partner-romance", name_he: "רגעים", name_ru: "Моменты", description_he: "חוויות זוגיות ורומנטיות: הפלגות, רכיבה ושקיעות בלתי נשכחות.", description_ru: "Романтические впечатления для пар: круизы, верховая езда и незабываемые закаты.", location_he: "חוף תל אביב והצפון", location_ru: "Побережье Тель-Авива и север", emoji: "💕", since: 2016, rating: 4.9 },
+  workshops: { slug: "partner-workshops", name_he: "יוצרים", name_ru: "Мастера", description_he: "סטודיו לסדנאות יצירה עם אמנים ושפים — קדרות, סושי, אמנות ועוד.", description_ru: "Студия творческих мастер-классов с художниками и шефами — гончарство, суши, искусство и не только.", location_he: "תל אביב ויפו", location_ru: "Тель-Авив и Яффо", emoji: "🎨", since: 2018, rating: 4.9 },
+};
+
+const RAW_EXPERIENCES = [
   {
     id: 1, slug: "skydiving", category: "extreme", emoji: "🪂", tint: "from-coral-500 to-coral-700",
     img: "https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=1000&q=80",
@@ -135,3 +146,6 @@ export const EXPERIENCES = [
     participants_he: "לזוג", participants_ru: "для двоих", is_best_seller: true
   }
 ];
+
+// Attach each experience's providing business (by category) for the fallback.
+export const EXPERIENCES = RAW_EXPERIENCES.map((e) => ({ ...e, business: BUSINESSES[e.category] || null }));

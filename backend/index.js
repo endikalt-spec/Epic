@@ -12,6 +12,7 @@ const { sendVoucherEmail } = require('./email');
 const assistant = require('./assistant');
 const customers = require('./customers');
 const crm = require('./crm');
+const reviews = require('./reviews');
 
 const app = express();
 const port = config.port;
@@ -49,14 +50,31 @@ app.get('/api/categories', async (_req, res) => {
 app.get('/api/experiences', async (req, res) => {
   const { category } = req.query;
   const rows = await dbSafe(async () => {
-    let q = 'SELECT e.*, c.slug AS category_slug FROM experiences e LEFT JOIN categories c ON e.category_id = c.id';
+    let q = `SELECT e.*, c.slug AS category_slug,
+                    b.slug AS business_slug, b.name_he AS business_name_he, b.name_ru AS business_name_ru,
+                    b.description_he AS business_description_he, b.description_ru AS business_description_ru,
+                    b.location_he AS business_location_he, b.location_ru AS business_location_ru,
+                    b.emoji AS business_emoji, b.logo AS business_logo, b.since AS business_since, b.rating AS business_rating
+               FROM experiences e
+               LEFT JOIN categories c ON e.category_id = c.id
+               LEFT JOIN businesses b ON e.business_id = b.id`;
     const params = [];
     if (category && category !== 'all') { q += ' WHERE c.slug = $1'; params.push(category); }
     q += ' ORDER BY e.is_best_seller DESC, e.id ASC';
     return (await db.query(q, params)).rows;
   }, null);
   if (rows == null) return res.status(503).json({ error: 'DB unavailable' });
-  res.json(rows);
+  // Fold the flat business_* columns into a nested object (or null).
+  const out = rows.map((r) => {
+    const business = r.business_slug ? {
+      slug: r.business_slug, name_he: r.business_name_he, name_ru: r.business_name_ru,
+      description_he: r.business_description_he, description_ru: r.business_description_ru,
+      location_he: r.business_location_he, location_ru: r.business_location_ru,
+      emoji: r.business_emoji, logo: r.business_logo, since: r.business_since, rating: r.business_rating,
+    } : null;
+    return { ...r, business };
+  });
+  res.json(out);
 });
 
 // ─────────────────────────── AUTH (Google / Apple) ───────────────────────────
@@ -152,9 +170,25 @@ app.post('/api/checkout', async (req, res) => {
     const items = (rows || []).map((r) => ({ id: r.id, title: r.title_he, price: Number(r.price) }));
     const title = rows?.[0]?.title_he || null;
 
+    // Loyalty ("VAU Club"): every 4th gift within a rolling year is 50% off.
+    // Computed server-side from the order history — never trusted from the client.
+    // The recipient still receives the full-value experience; only the buyer's
+    // charge is reduced, so the voucher's face value stays the gross amount.
+    const grossAmount = amount;
+    let discount = 0;
+    let loyaltyReward = false;
+    if (req.user?.sub) {
+      const loy = await dbSafe(() => customers.getLoyalty(db, req.user.sub), null);
+      if (loy?.rewardReady) {
+        discount = Math.round(grossAmount * loy.discountPct / 100);
+        loyaltyReward = true;
+      }
+    }
+    const chargeAmount = grossAmount - discount;
+
     // 1) Charge via the gateway. Only proceed on a real success.
     const gateway = getGateway();
-    const payment = await gateway.createPayment({ amount, method, metadata: { cardLast4, buyerEmail: deliverTo } });
+    const payment = await gateway.createPayment({ amount: chargeAmount, method, metadata: { cardLast4, buyerEmail: deliverTo } });
     if (payment.status !== 'succeeded') {
       return res.status(402).json({ error: 'Payment not completed', status: payment.status, clientSecret: payment.clientSecret });
     }
@@ -167,14 +201,14 @@ app.post('/api/checkout', async (req, res) => {
     await dbSafe(async () => {
       const p = await db.query(
         'INSERT INTO payments (provider,provider_ref,amount,currency,method,status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-        [gateway.name, payment.id, amount, config.payments.currency, method, 'succeeded']);
+        [gateway.name, payment.id, chargeAmount, config.payments.currency, method, 'succeeded']);
       paymentDbId = p.rows[0].id;
       await db.query(
         `INSERT INTO vouchers (code,token,signature,type,status,recipient_ref,recipient_email,recipient_name,buyer_email,buyer_user_id,payment_id,option_ids,face_value,expires_at)
          VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [voucher.code, voucher.token, voucher.signature, voucher.type, voucher.recipientRef,
          recipient?.email || null, recipient?.name || null, deliverTo, req.user?.sub || null,
-         paymentDbId, experienceIds, amount, voucher.expiresAt]);
+         paymentDbId, experienceIds, grossAmount, voucher.expiresAt]);
     });
 
     // 3b) Record the customer, consent (terms + marketing) and the order — the
@@ -185,12 +219,13 @@ app.post('/api/checkout', async (req, res) => {
       ip: clientIp(req), userAgent: req.headers['user-agent'],
       acceptTerms: true, marketingOptIn: !!marketingOptIn,
       order: {
-        voucherCode: voucher.code, paymentId: paymentDbId, amount,
+        voucherCode: voucher.code, paymentId: paymentDbId, amount: chargeAmount,
         currency: config.payments.currency, method, voucherType, items,
+        discount, loyaltyReward,
       },
     }));
     crm.identify({ email: deliverTo, name: buyer.name, locale, marketingOptIn: !!marketingOptIn });
-    crm.trackPurchase({ email: deliverTo, buyerName: buyer.name, locale, amount, currency: config.payments.currency, voucherCode: voucher.code, items });
+    crm.trackPurchase({ email: deliverTo, buyerName: buyer.name, locale, amount: chargeAmount, currency: config.payments.currency, voucherCode: voucher.code, items });
 
     // 4) Email the e-voucher.
     const email = await sendVoucherEmail({ to: deliverTo, voucher, experienceTitle: title, buyerName: req.user?.name });
@@ -199,7 +234,7 @@ app.post('/api/checkout', async (req, res) => {
       success: true,
       code: voucher.code,
       voucher: { code: voucher.code, type: voucher.type, qr: voucher.qr, barcode: voucher.barcode, url: voucher.url, expiresAt: voucher.expiresAt },
-      payment: { status: 'succeeded', method, amount },
+      payment: { status: 'succeeded', method, amount: chargeAmount, gross: grossAmount, discount, loyaltyReward },
       email,
     });
   } catch (err) {
@@ -351,6 +386,35 @@ app.post('/api/me/consent', async (req, res) => {
   if (!ok) return res.status(503).json({ error: 'DB unavailable' });
   crm.updateConsent({ email: req.user.email, name: req.user.name }, { marketingOptIn });
   res.json({ ok: true, marketingOptIn });
+});
+
+// ─────────────────────────── LOYALTY (VAU Club) ───────────────────────────
+app.get('/api/me/loyalty', async (req, res) => {
+  if (!req.user?.sub) return res.status(401).json({ error: 'auth_required' });
+  const data = await dbSafe(() => customers.getLoyalty(db, req.user.sub), undefined);
+  if (data === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  res.json(data);
+});
+
+// ─────────────────────────── REVIEWS ───────────────────────────
+app.get('/api/reviews', async (req, res) => {
+  const { experienceId, limit } = req.query;
+  const rows = await dbSafe(() => reviews.listReviews(db, { experienceId, limit }), null);
+  if (rows == null) return res.status(503).json({ error: 'DB unavailable' });
+  res.json(rows);
+});
+
+app.post('/api/reviews', async (req, res) => {
+  const ip = clientIp(req);
+  if (fraud.tooManyAttempts(`review:${ip}`, { max: 8 })) return res.status(429).json({ error: 'Too many reviews. Try later.' });
+  const { experienceId = null, authorName, rating, body } = req.body || {};
+  const name = authorName || req.user?.name;
+  const result = await dbSafe(() => reviews.createReview(db, {
+    experienceId, userId: req.user?.sub || null, authorName: name, rating, body,
+  }), undefined);
+  if (result === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  if (result.error) return res.status(400).json({ error: result.error });
+  res.status(201).json(result.review);
 });
 
 // ─────────────────────────── ADMIN (CRM back-office) ───────────────────────────

@@ -9,6 +9,25 @@ CREATE TABLE IF NOT EXISTS categories (
     tint TEXT
 );
 
+-- ── Businesses / partners (each experience is provided by a business) ──
+-- This is the "add a new business" model: register a partner once, then attach
+-- experiences to it. Each business gets its own presentable profile block.
+CREATE TABLE IF NOT EXISTS businesses (
+    id SERIAL PRIMARY KEY,
+    slug TEXT UNIQUE NOT NULL,
+    name_he TEXT NOT NULL,
+    name_ru TEXT NOT NULL,
+    description_he TEXT,
+    description_ru TEXT,
+    location_he TEXT,
+    location_ru TEXT,
+    emoji TEXT,
+    logo TEXT,
+    since INTEGER,                 -- year the partner joined / was founded
+    rating DECIMAL(3,2) DEFAULT 5.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS experiences (
     id SERIAL PRIMARY KEY,
     title_he TEXT NOT NULL,
@@ -156,3 +175,22 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email);
+
+-- ── Additive columns (idempotent — safe to re-run on an existing database) ──
+ALTER TABLE experiences ADD COLUMN IF NOT EXISTS business_id INTEGER REFERENCES businesses(id);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount INTEGER DEFAULT 0;         -- amount discounted (e.g. loyalty)
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS loyalty_reward BOOLEAN DEFAULT FALSE;
+
+-- ── Reviews (customers write what they liked about an experience) ──
+CREATE TABLE IF NOT EXISTS reviews (
+    id SERIAL PRIMARY KEY,
+    experience_id INTEGER REFERENCES experiences(id),  -- NULL = general site review
+    user_id TEXT REFERENCES users(id),
+    author_name TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'published',           -- published | pending | hidden
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_experience ON reviews(experience_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);

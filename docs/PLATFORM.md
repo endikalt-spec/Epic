@@ -165,6 +165,38 @@ admin API is **disabled entirely** rather than exposed with a weak default.
 
 ---
 
+## 9. Businesses, reviews & loyalty (VAU Club)
+
+**Businesses / partners.** Each experience is provided by a *business*. The
+`businesses` table is the "add a new partner" model: register a business once
+(name, description, location, emoji/logo, founding year, rating — all he/ru),
+then attach experiences to it via `experiences.business_id`. The
+`/api/experiences` response folds the partner into a nested `business` object,
+and the experience modal renders a dedicated **"provided by"** block. The
+fallback catalog (`data.js`) carries the same shape so it works offline.
+
+**Customer reviews.** Visitors write what they liked — per experience or about
+the site in general. `reviews` are persisted (`POST /api/reviews`, rate-limited)
+and only `published` ones are shown (`GET /api/reviews?experienceId=`). Set
+`REVIEW_MODERATION=true` to hold new reviews as `pending` for admin approval.
+The frontend shows a live reviews grid + a write-a-review form both on the home
+page and inside each experience modal; if the API is offline it falls back to
+static testimonials so the section never looks broken. Reviews are **never
+faked** — submitting requires the backend.
+
+**Loyalty — "VAU Club".** A rolling-12-month repeat-purchase reward: within any
+12 months, gifts 1–3 are full price and **every 4th gift is 50% off**, then the
+cycle repeats. It is computed **server-side from the `orders` table**
+(`customers.getLoyalty`) so it can't be gamed from the client, and applied
+automatically at checkout for signed-in buyers. Important: only the **buyer's
+charge** is reduced — the **recipient still receives the full-value experience**,
+so the voucher's `face_value` stays the gross amount (the discount is recorded on
+the order as `discount` + `loyalty_reward`). Guests don't accrue loyalty (no
+identity). The home page shows a **VAU Club** section with live progress dots for
+signed-in users, and the gift drawer previews the discount on the total.
+
+---
+
 ## API surface (added)
 
 ```
@@ -185,8 +217,15 @@ POST /api/assistant                        { messages, recipient?, catalog, lang
 GET  /api/me/orders                        (auth) → { customer, orders, consents }
 POST /api/me/consent                       (auth) { marketingOptIn: boolean }
 
+GET  /api/me/loyalty                       (auth) → { purchases, remaining, rewardReady, discountPct }
+GET  /api/reviews?experienceId=&limit=     → published reviews
+POST /api/reviews                          { experienceId?, authorName, rating, body }
+
 GET  /api/admin/stats                      (X-Admin-Token) → totals
 GET  /api/admin/customers?q=&limit=&offset=(X-Admin-Token) → customer list
 GET  /api/admin/customers/:id              (X-Admin-Token) → profile + orders + consents
 GET  /api/admin/orders?limit=&offset=      (X-Admin-Token) → recent orders
 ```
+
+The experience payload now also carries `discount` / `loyalty_reward` on the
+checkout `payment` object, and experiences include a nested `business`.

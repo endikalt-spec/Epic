@@ -74,10 +74,11 @@ async function recordPurchase(db, {
 
     // The order record + lifetime totals.
     const o = await client.query(
-      `INSERT INTO orders (user_id, email, voucher_code, payment_id, amount, currency, method, voucher_type, items, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'paid') RETURNING id, created_at`,
+      `INSERT INTO orders (user_id, email, voucher_code, payment_id, amount, currency, method, voucher_type, items, discount, loyalty_reward, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'paid') RETURNING id, created_at`,
       [id, email || null, order.voucherCode || null, order.paymentId || null, order.amount,
-       order.currency, order.method || null, order.voucherType || null, JSON.stringify(order.items || [])]
+       order.currency, order.method || null, order.voucherType || null, JSON.stringify(order.items || []),
+       order.discount || 0, !!order.loyaltyReward]
     );
     await client.query(
       `UPDATE users SET orders_count = orders_count + 1, total_spent = total_spent + $2,
@@ -129,6 +130,31 @@ async function listOrders(db, { limit = 50, offset = 0 } = {}) {
   )).rows;
 }
 
+// ── Loyalty program ("VAU Club") ──
+// Rolling-12-month repeat-purchase reward: every 4th gift is 50% off. Purchases
+// 1-3 are full price; the 4th is discounted; then the cycle repeats. Computed
+// purely from the orders table so it can't be gamed from the client.
+const LOYALTY = { windowMonths: 12, threshold: 4, discountPct: 50 };
+
+async function getLoyalty(db, userId) {
+  const r = await db.query(
+    `SELECT COUNT(*)::int AS c FROM orders
+      WHERE user_id = $1 AND status = 'paid'
+        AND created_at > NOW() - INTERVAL '12 months'`,
+    [userId]
+  );
+  const purchases = r.rows[0].c;                 // qualifying purchases in the window
+  const cycle = purchases % LOYALTY.threshold;   // 0..3 position within the current cycle
+  const rewardReady = cycle === LOYALTY.threshold - 1; // 3 done → the next gift is 50% off
+  const remaining = rewardReady ? 0 : LOYALTY.threshold - 1 - cycle; // full-price gifts left until the reward
+  return {
+    windowMonths: LOYALTY.windowMonths,
+    threshold: LOYALTY.threshold,
+    discountPct: LOYALTY.discountPct,
+    purchases, cycle, remaining, rewardReady,
+  };
+}
+
 async function stats(db) {
   const r = (await db.query(
     `SELECT
@@ -148,5 +174,5 @@ async function stats(db) {
 
 module.exports = {
   resolveCustomerId, upsertCustomer, recordConsent, recordPurchase,
-  listCustomers, getCustomer, listOrders, stats,
+  listCustomers, getCustomer, listOrders, stats, getLoyalty, LOYALTY,
 };

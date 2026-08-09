@@ -26,5 +26,12 @@ export const activateVoucher = (payload) => api.post("/vouchers/activate", paylo
 export const redeemVoucher = (payload) => api.post("/vouchers/redeem", payload).then((r) => r.data);
 export const exchangeVoucher = (payload) => api.post("/vouchers/exchange", payload).then((r) => r.data);
 
+// ── Loyalty (VAU Club) ──
+export const getLoyalty = () => api.get("/me/loyalty").then((r) => r.data);
+
+// ── Reviews ──
+export const getReviews = (params) => api.get("/reviews", { params }).then((r) => r.data);
+export const postReview = (payload) => api.post("/reviews", payload).then((r) => r.data);
+
 // ── Assistant ──
 export const askAssistant = (payload) => api.post("/assistant", payload).then((r) => r.data);

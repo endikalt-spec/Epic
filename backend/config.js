@@ -23,6 +23,9 @@ const config = {
   // accepted. Bump this whenever the Terms / Privacy text changes.
   policyVersion: process.env.POLICY_VERSION || '2026-08',
 
+  // Hold new customer reviews as 'pending' for admin approval before showing.
+  reviewModeration: /^(1|true|yes|on)$/i.test(String(process.env.REVIEW_MODERATION || '')),
+
   // ── Auth providers ──
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || '',

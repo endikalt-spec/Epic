@@ -12,7 +12,7 @@ import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
-import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe } from "./api";
+import { API_URL, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
 const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
@@ -116,6 +116,13 @@ export default function Vau() {
   const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [legalDoc, setLegalDoc] = useState("terms");
+  const [loyalty, setLoyalty] = useState(null);
+  const [lastPayment, setLastPayment] = useState(null);
+
+  const refreshLoyalty = () => {
+    if (!localStorage.getItem("vau_token")) { setLoyalty(null); return; }
+    getLoyalty().then(setLoyalty).catch(() => setLoyalty(null));
+  };
 
   const loc = (obj, field) => obj?.[`${field}_${lang}`] ?? obj?.[`${field}_he`] ?? "";
 
@@ -165,7 +172,16 @@ export default function Vau() {
     }
   }, []);
 
-  const signOut = () => { localStorage.removeItem("vau_token"); setUser(null); };
+  // Load VAU Club loyalty status whenever the signed-in user changes. Only calls
+  // setState from the async callback (logout clearing is handled in signOut).
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    getLoyalty().then((d) => { if (alive) setLoyalty(d); }).catch(() => { if (alive) setLoyalty(null); });
+    return () => { alive = false; };
+  }, [user]);
+
+  const signOut = () => { localStorage.removeItem("vau_token"); setUser(null); setLoyalty(null); };
 
   // Lock body scroll when an overlay is open
   useEffect(() => {
@@ -215,7 +231,9 @@ export default function Vau() {
       // Only surface a voucher the server actually issued; only then clear the cart.
       setOrderCode(res.code);
       setVoucher(res.voucher);
+      setLastPayment(res.payment || null);
       clearGiftBox();
+      refreshLoyalty();
     } catch {
       setCheckoutError(t("checkout_error"));
     } finally {
@@ -263,7 +281,9 @@ export default function Vau() {
 
       <OccasionsBar t={t} />
 
-      <Reviews t={t} />
+      <LoyaltySection {...{ t, loyalty, user, onSignIn: () => setLoginOpen(true) }} />
+
+      <Reviews t={t} loc={loc} />
 
       <BusinessBanner t={t} rtl={rtl} />
 
@@ -277,7 +297,8 @@ export default function Vau() {
       <GiftDrawer
         {...{ open: drawerOpen, close: () => { setDrawerOpen(false); setCheckoutError(""); }, t, loc, giftBox,
           removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout,
-          orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal }}
+          orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal,
+          loyalty, lastPayment, setLastPayment }}
       />
 
       {/* Experience modal */}
@@ -285,7 +306,7 @@ export default function Vau() {
         <ExperienceModal
           {...{ exp: modalExp, close: () => setModalExp(null), t, loc,
             add: () => { addToGiftBox(modalExp); setModalExp(null); setDrawerOpen(true); },
-            added: inBox(modalExp.id), boxFull, rtl }}
+            added: inBox(modalExp.id), boxFull, rtl, user }}
         />
       )}
 
@@ -712,32 +733,186 @@ function OccasionsBar({ t }) {
   );
 }
 
+/* ─────────────────────────── LOYALTY (VAU CLUB) ─────────────────────────── */
+
+function LoyaltySection({ t, loyalty, user, onSignIn }) {
+  const threshold = loyalty?.threshold || 4;
+  const cycle = loyalty?.cycle ?? 0;          // 0..threshold-1
+  const rewardReady = !!loyalty?.rewardReady;
+  const discount = loyalty?.discountPct || 50;
+  // Dots: filled = purchases done in the current cycle; the last dot is the reward.
+  const dots = Array.from({ length: threshold }, (_, i) => i);
+
+  return (
+    <section id="club" className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-24">
+      <div className="relative overflow-hidden rounded-[2.5rem] mesh-dark text-white px-6 sm:px-12 py-12 sm:py-16">
+        <div className="relative z-10 grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <Pill className="bg-white/15 text-white mb-4"><Sparkles size={12} /> {t("club_badge")}</Pill>
+            <h2 className="font-display text-3xl sm:text-4xl font-extrabold mb-3">{t("club_title")}</h2>
+            <p className="text-white/80 leading-relaxed mb-6">{t("club_subtitle", { threshold, discount })}</p>
+            <ol className="space-y-2 text-white/90">
+              <li className="flex items-center gap-3"><span className="grid place-items-center h-7 w-7 rounded-full bg-white/15 font-bold text-sm">1</span> {t("club_step_1")}</li>
+              <li className="flex items-center gap-3"><span className="grid place-items-center h-7 w-7 rounded-full bg-white/15 font-bold text-sm">2</span> {t("club_step_2", { n: threshold - 1 })}</li>
+              <li className="flex items-center gap-3"><span className="grid place-items-center h-7 w-7 rounded-full bg-coral-500 font-bold text-sm">%</span> {t("club_step_3", { threshold, discount })}</li>
+            </ol>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur rounded-3xl p-7 border border-white/15">
+            {user && loyalty ? (
+              <>
+                <div className="text-sm text-white/70 mb-4">{t("club_your_progress")}</div>
+                <div className="flex items-center gap-3 mb-5">
+                  {dots.map((i) => {
+                    const isReward = i === threshold - 1;
+                    const filled = i < cycle;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                        <div className={`grid place-items-center h-12 w-12 rounded-2xl font-bold ${isReward ? (rewardReady ? "bg-coral-500 text-white glow-coral animate-pop" : "bg-white/10 text-white/60 border border-dashed border-white/30") : filled ? "bg-white text-ink-900" : "bg-white/10 text-white/50"}`}>
+                          {isReward ? `-${discount}%` : filled ? <Check size={18} /> : <Gift size={16} />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {rewardReady ? (
+                  <div className="rounded-2xl bg-coral-500 px-4 py-3 text-center font-bold animate-pop">🎁 {t("club_reward_ready", { discount })}</div>
+                ) : (
+                  <div className="text-center text-white/80 text-sm">{t("club_remaining", { n: loyalty.remaining })}</div>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <div className="text-5xl mb-3">🎁</div>
+                <p className="text-white/80 mb-5">{t("club_sign_in_cta", { threshold, discount })}</p>
+                <Btn variant="primary" onClick={onSignIn} className="w-full"><LogIn size={16} /> {t("sign_in")}</Btn>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ─────────────────────────── REVIEWS ─────────────────────────── */
 
+// Star picker for the review form.
+function StarPick({ value, onChange }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" onClick={() => onChange(n)} className="p-0.5" aria-label={`${n}`}>
+          <Star size={22} className={n <= value ? "text-sun-500" : "text-cream-300"} fill={n <= value ? "currentColor" : "none"} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Reusable reviews block: loads published reviews (optionally for one experience)
+// and lets the visitor write one. Used both on the home page and in the modal.
+function ReviewsBlock({ t, experienceId = null, user, compact = false }) {
+  const [items, setItems] = useState(null);   // null = loading
+  const [failed, setFailed] = useState(false);
+  const [name, setName] = useState("");
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  const authorName = name || user?.name || "";
+
+  useEffect(() => {
+    let alive = true;
+    const params = experienceId ? { experienceId } : { limit: 12 };
+    getReviews(params)
+      .then((rows) => { if (alive) setItems(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (alive) { setItems([]); setFailed(true); } });
+    return () => { alive = false; };
+  }, [experienceId]);
+
+  const submit = async () => {
+    setError(""); setBusy(true);
+    try {
+      const review = await postReview({ experienceId: experienceId || undefined, authorName, rating, body });
+      setItems((prev) => [review, ...(prev || [])]);
+      setBody(""); setDone(true); setTimeout(() => setDone(false), 2500);
+    } catch {
+      setError(t("review_error"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canSubmit = authorName.trim() && body.trim().length >= 3 && !busy;
+  // Fallback testimonials (translations) when the API is offline and empty.
+  const showFallback = failed && (items?.length ?? 0) === 0;
+
+  return (
+    <div>
+      {/* List */}
+      {items === null ? (
+        <div className="flex justify-center py-8"><Loader2 className="animate-spin text-coral-400" /></div>
+      ) : showFallback ? (
+        <div className={`grid gap-6 ${compact ? "" : "md:grid-cols-3"}`}>
+          {[1, 2, 3].map((n) => (
+            <figure key={n} className="bg-white rounded-3xl p-7 shadow-soft flex flex-col">
+              <div className="flex gap-1 text-sun-500 mb-4">{[...Array(5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}</div>
+              <blockquote className="text-ink-700 leading-relaxed flex-1">"{t(`review_${n}`)}"</blockquote>
+              <figcaption className="mt-6 flex items-center gap-3">
+                <div className="grid place-items-center h-11 w-11 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{t(`review_${n}_name`).charAt(0)}</div>
+                <div><div className="font-bold text-ink-900">{t(`review_${n}_name`)}</div><div className="text-sm text-ink-400">{t(`review_${n}_role`)}</div></div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-center text-ink-400 py-6">{t("review_empty")}</p>
+      ) : (
+        <div className={`grid gap-6 ${compact ? "" : "md:grid-cols-3"}`}>
+          {items.slice(0, compact ? 4 : 12).map((r) => (
+            <figure key={r.id} className="bg-white rounded-3xl p-7 shadow-soft flex flex-col">
+              <div className="flex gap-1 text-sun-500 mb-4">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < r.rating ? "" : "text-cream-300"} fill={i < r.rating ? "currentColor" : "none"} />)}</div>
+              <blockquote className="text-ink-700 leading-relaxed flex-1">"{r.body}"</blockquote>
+              <figcaption className="mt-6 flex items-center gap-3">
+                <div className="grid place-items-center h-11 w-11 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{(r.author_name || "?").charAt(0)}</div>
+                <div><div className="font-bold text-ink-900">{r.author_name}</div><div className="text-sm text-ink-400">{new Date(r.created_at).toLocaleDateString()}</div></div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+
+      {/* Write a review */}
+      <div className="mt-8 bg-white rounded-3xl p-6 shadow-soft max-w-2xl mx-auto">
+        <h4 className="font-display text-lg font-bold mb-4 flex items-center gap-2"><Star size={18} className="text-sun-500" /> {t("review_write_title")}</h4>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <input value={authorName} onChange={(e) => setName(e.target.value)} placeholder={t("review_name_ph")}
+            className="rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-ink-500 font-bold">{t("review_rating")}</span>
+            <StarPick value={rating} onChange={setRating} />
+          </div>
+        </div>
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder={t("review_body_ph")}
+          className="w-full rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300 mb-3" />
+        {error && <p className="text-coral-600 text-sm font-semibold mb-3">{error}</p>}
+        <div className="flex items-center gap-3">
+          <Btn variant="primary" onClick={submit} disabled={!canSubmit} loading={busy}>{t("review_submit")}</Btn>
+          {done && <span className="text-teal-600 text-sm font-bold flex items-center gap-1"><Check size={16} /> {t("review_thanks")}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Reviews({ t }) {
-  const items = [1, 2, 3];
   return (
     <section id="reviews" className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-24">
       <SectionHead title={t("reviews_title")} subtitle={t("reviews_subtitle")} center />
-      <div className="grid md:grid-cols-3 gap-6">
-        {items.map((n) => (
-          <figure key={n} className="bg-white rounded-3xl p-7 shadow-soft flex flex-col">
-            <div className="flex gap-1 text-sun-500 mb-4">
-              {[...Array(5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}
-            </div>
-            <blockquote className="text-ink-700 leading-relaxed flex-1">"{t(`review_${n}`)}"</blockquote>
-            <figcaption className="mt-6 flex items-center gap-3">
-              <div className="grid place-items-center h-11 w-11 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">
-                {t(`review_${n}_name`).charAt(0)}
-              </div>
-              <div>
-                <div className="font-bold text-ink-900">{t(`review_${n}_name`)}</div>
-                <div className="text-sm text-ink-400">{t(`review_${n}_role`)}</div>
-              </div>
-            </figcaption>
-          </figure>
-        ))}
-      </div>
+      <ReviewsBlock t={t} />
     </section>
   );
 }
@@ -889,7 +1064,7 @@ function Footer({ t, lang, goRedeem, goLegal }) {
 
 /* ─────────────────────────── GIFT DRAWER ─────────────────────────── */
 
-function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal }) {
+function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal, loyalty, lastPayment, setLastPayment }) {
   const [copied, setCopied] = useState(false);
   const [buyerEmailInput, setBuyerEmailInput] = useState("");
   const [voucherType, setVoucherType] = useState("bearer");
@@ -901,6 +1076,13 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
 
+  // VAU Club preview: if the signed-in user's next gift is the reward one, show
+  // the 50% discount here. The server re-checks and applies it authoritatively.
+  const rewardReady = !!(user && loyalty?.rewardReady);
+  const discountPct = loyalty?.discountPct || 50;
+  const discount = rewardReady ? Math.round(total * discountPct / 100) : 0;
+  const payable = total - discount;
+
   // Default to the signed-in user's email without an effect (avoids cascading renders).
   const buyerEmail = buyerEmailInput || user?.email || "";
   const setBuyerEmail = setBuyerEmailInput;
@@ -910,7 +1092,7 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
       setCopied(true); setTimeout(() => setCopied(false), 1800);
     }).catch(() => {});
   };
-  const closeAll = () => { setOrderCode(null); setVoucher(null); close(); };
+  const closeAll = () => { setOrderCode(null); setVoucher(null); setLastPayment?.(null); close(); };
 
   const emailOk = /.+@.+\..+/.test(buyerEmail);
   const recipientOk = voucherType !== "personalized" || /.+@.+\..+/.test(recipientEmail);
@@ -953,6 +1135,9 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                 </>
               )}
             </div>
+            {lastPayment?.discount > 0 && (
+              <p className="text-sm font-bold text-teal-600 mb-2 flex items-center justify-center gap-1.5"><Sparkles size={15} /> {t("club_saved", { amount: nis(lastPayment.discount) })}</p>
+            )}
             {buyerEmail && <p className="text-xs text-ink-500 mb-4">{t("email_sent_to")}: <b>{buyerEmail}</b></p>}
             <Btn variant="soft" onClick={copy} className="mb-3 w-full">
               {copied ? <><Check size={16} /> {t("copied")}</> : <><Copy size={16} /> {t("copy_code")}</>}
@@ -1058,15 +1243,31 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                 </label>
               </div>
 
+              {/* VAU Club progress / reward */}
+              {user && loyalty && (
+                rewardReady ? (
+                  <div className="rounded-xl bg-coral-50 border border-coral-200 px-4 py-2.5 text-sm font-bold text-coral-700 flex items-center gap-2">
+                    <Sparkles size={15} /> {t("club_reward_applied", { discount: discountPct })}
+                  </div>
+                ) : loyalty.remaining > 0 ? (
+                  <div className="rounded-xl bg-cream-100 px-4 py-2.5 text-xs text-ink-500 flex items-center gap-2">
+                    <Gift size={14} className="text-coral-500" /> {t("club_drawer_hint", { n: loyalty.remaining, discount: discountPct })}
+                  </div>
+                ) : null
+              )}
+
               <div className="flex items-center justify-between pt-1">
                 <span className="font-bold text-ink-500">{t("total")}</span>
-                <span className="font-display text-2xl font-extrabold text-ink-900">{nis(total)}</span>
+                <span className="font-display text-2xl font-extrabold text-ink-900">
+                  {discount > 0 && <span className="text-ink-300 line-through text-lg me-2 font-bold">{nis(total)}</span>}
+                  {nis(payable)}
+                </span>
               </div>
               {checkoutError && (
                 <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center">{checkoutError}</p>
               )}
               <Btn variant="primary" size="lg" className="w-full" loading={checkoutLoading} disabled={!canPay} onClick={submit}>
-                {t("checkout")} · {nis(total)}
+                {t("checkout")} · {nis(payable)}
               </Btn>
               <button onClick={clearGiftBox} className="w-full text-sm font-bold text-ink-400 hover:text-coral-600">{t("clear_box")}</button>
             </div>
@@ -1079,7 +1280,8 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
 
 /* ─────────────────────────── EXPERIENCE MODAL ─────────────────────────── */
 
-function ExperienceModal({ exp, close, t, loc, add, added, boxFull }) {
+function ExperienceModal({ exp, close, t, loc, add, added, boxFull, user }) {
+  const biz = exp.business;
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={close}>
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm animate-pop" />
@@ -1099,6 +1301,33 @@ function ExperienceModal({ exp, close, t, loc, add, added, boxFull }) {
             {loc(exp, "duration") && <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow-soft"><Clock size={16} className="text-teal-500" /> {t("duration")}: {loc(exp, "duration")}</span>}
             {loc(exp, "participants") && <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow-soft"><Users size={16} className="text-teal-500" /> {t("participants")}: {loc(exp, "participants")}</span>}
           </div>
+
+          {/* Providing business / partner */}
+          {biz && (
+            <div className="rounded-2xl border border-cream-200 bg-white p-5 mb-6">
+              <div className="text-xs font-bold text-ink-400 mb-2">{t("provided_by")}</div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="grid place-items-center h-12 w-12 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 text-white text-2xl shrink-0">{biz.emoji || "🏢"}</div>
+                <div className="min-w-0">
+                  <div className="font-display text-lg font-extrabold text-ink-900 truncate">{loc(biz, "name")}</div>
+                  <div className="flex items-center gap-3 text-sm text-ink-400">
+                    {biz.rating && <span className="inline-flex items-center gap-1"><Star size={13} className="text-sun-500" fill="currentColor" /> {Number(biz.rating).toFixed(1)}</span>}
+                    {biz.since && <span>{t("partner_since", { year: biz.since })}</span>}
+                  </div>
+                </div>
+              </div>
+              {loc(biz, "description") && <p className="text-ink-600 text-sm leading-relaxed mb-2">{loc(biz, "description")}</p>}
+              {loc(biz, "location") && <div className="inline-flex items-center gap-1.5 text-sm text-ink-500 font-semibold"><Building2 size={14} className="text-teal-500" /> {loc(biz, "location")}</div>}
+            </div>
+          )}
+
+          {/* Reviews for this experience */}
+          {exp.id != null && (
+            <div className="mb-2">
+              <h3 className="font-display text-lg font-bold text-ink-900 mb-4">{t("reviews_for_experience")}</h3>
+              <ReviewsBlock t={t} experienceId={exp.id} user={user} compact />
+            </div>
+          )}
         </div>
         <div className="border-t border-cream-200 bg-white p-5 flex items-center justify-between gap-4 shrink-0">
           <div>
