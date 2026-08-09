@@ -199,6 +199,7 @@ export default function Vau() {
         amount: total,
         method: form.method,
         buyerEmail: form.buyerEmail,
+        buyerName: form.buyerName || undefined,
         voucherType: form.voucherType,
         recipient:
           form.voucherType === "personalized"
@@ -207,6 +208,9 @@ export default function Vau() {
             ? { email: form.recipientEmail }
             : null,
         cardLast4: form.cardLast4 || undefined,
+        acceptTerms: form.acceptTerms,
+        marketingOptIn: form.marketingOptIn,
+        locale: i18n.language,
       });
       // Only surface a voucher the server actually issued; only then clear the cart.
       setOrderCode(res.code);
@@ -273,7 +277,7 @@ export default function Vau() {
       <GiftDrawer
         {...{ open: drawerOpen, close: () => { setDrawerOpen(false); setCheckoutError(""); }, t, loc, giftBox,
           removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout,
-          orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl }}
+          orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal }}
       />
 
       {/* Experience modal */}
@@ -885,7 +889,7 @@ function Footer({ t, lang, goRedeem, goLegal }) {
 
 /* ─────────────────────────── GIFT DRAWER ─────────────────────────── */
 
-function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl }) {
+function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal }) {
   const [copied, setCopied] = useState(false);
   const [buyerEmailInput, setBuyerEmailInput] = useState("");
   const [voucherType, setVoucherType] = useState("bearer");
@@ -893,6 +897,8 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
   const [recipientEmail, setRecipientEmail] = useState("");
   const [method, setMethod] = useState("card");
   const [cardLast4, setCardLast4] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
 
   // Default to the signed-in user's email without an effect (avoids cascading renders).
@@ -908,9 +914,9 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
 
   const emailOk = /.+@.+\..+/.test(buyerEmail);
   const recipientOk = voucherType !== "personalized" || /.+@.+\..+/.test(recipientEmail);
-  const canPay = emailOk && recipientOk && giftBox.length > 0;
+  const canPay = emailOk && recipientOk && giftBox.length > 0 && acceptTerms;
 
-  const submit = () => handleCheckout({ buyerEmail, voucherType, recipientName, recipientEmail, method, cardLast4 });
+  const submit = () => handleCheckout({ buyerEmail, buyerName: user?.name, voucherType, recipientName, recipientEmail, method, cardLast4, acceptTerms, marketingOptIn });
 
   const methods = [
     ["card", t("pay_card"), CreditCard],
@@ -1031,6 +1037,25 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                   <input value={cardLast4} onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="•••• •••• •••• 1234"
                     className="w-full mt-2 rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
                 )}
+              </div>
+
+              {/* Consent: Terms/Privacy (required) + marketing opt-in (optional) */}
+              <div className="space-y-2.5 pt-1">
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-ink-600 leading-snug">
+                  <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-coral-500" />
+                  <span>
+                    {t("consent_terms_pre")}{" "}
+                    <button type="button" onClick={() => goLegal?.("terms")} className="font-bold text-coral-600 underline">{t("footer_terms")}</button>
+                    {" "}{t("consent_and")}{" "}
+                    <button type="button" onClick={() => goLegal?.("privacy")} className="font-bold text-coral-600 underline">{t("footer_privacy")}</button>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-ink-600 leading-snug">
+                  <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-coral-500" />
+                  <span>{t("consent_marketing")}</span>
+                </label>
               </div>
 
               <div className="flex items-center justify-between pt-1">

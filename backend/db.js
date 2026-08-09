@@ -15,4 +15,8 @@ const pool = new Pool({ connectionString: cs, ssl });
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
+  // A dedicated client for multi-statement transactions (BEGIN/COMMIT).
+  // The caller MUST release() it. The returned object exposes query() so the
+  // same helper functions work with either the pool or a transaction client.
+  getClient: () => pool.connect(),
 };

@@ -219,6 +219,14 @@ Beyond the storefront, VAU ships a commerce/identity scaffold that runs in
 - **AI gift assistant** — a chat concierge that recommends experiences from the
   catalog. Uses **Anthropic Claude** when `ANTHROPIC_API_KEY` is set; a
   deterministic recommender otherwise.
+- **Customers, consent & CRM** — a built-in customer/orders/consent store (our
+  Postgres is the system of record) plus a pluggable external CRM/ESP connector
+  (`crm.js`: `log` demo → **Brevo** / **HubSpot**). Buying a voucher requires
+  accepting Terms + Privacy and captures an **auditable consent trail**
+  (timestamp, IP, policy version) with an explicit, revocable marketing opt-in —
+  as required by Israeli anti-spam & privacy law. A token-protected `/api/admin/*`
+  back-office shows **who bought what, for how much, and when**; customers can see
+  their own orders and opt out via `/api/me/*`.
 - **Legal pages** — original Terms of Use and Privacy Policy drafts (Hebrew +
   Russian) tailored to Israeli law (`frontend/src/legal.js`), linked from the
   footer. They are **templates with placeholders** and carry an on-page notice

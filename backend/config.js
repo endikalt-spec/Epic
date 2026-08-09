@@ -15,6 +15,14 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'dev-insecure-jwt-secret-change-me',
   voucherSecret: process.env.VOUCHER_SECRET || 'dev-insecure-voucher-hmac-secret-change-me',
 
+  // Admin API token (protects /api/admin/* CRM read endpoints). When unset the
+  // admin API is disabled entirely rather than exposed with a weak default.
+  adminToken: process.env.ADMIN_TOKEN || '',
+
+  // Version stamped onto recorded consents so we know which document a customer
+  // accepted. Bump this whenever the Terms / Privacy text changes.
+  policyVersion: process.env.POLICY_VERSION || '2026-08',
+
   // ── Auth providers ──
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -55,6 +63,19 @@ const config = {
     },
   },
 
+  // ── CRM / marketing platform ──
+  // provider: 'log' (default, no keys — prints intended syncs) | 'brevo' | 'hubspot'
+  crm: {
+    provider: process.env.CRM_PROVIDER || 'log',
+    brevo: {
+      apiKey: process.env.BREVO_API_KEY || '',
+      listId: process.env.BREVO_LIST_ID || '',
+    },
+    hubspot: {
+      token: process.env.HUBSPOT_TOKEN || '',
+    },
+  },
+
   // ── AI gift assistant ──
   assistant: {
     // Uses the Anthropic API when ANTHROPIC_API_KEY is set; otherwise falls
@@ -76,6 +97,10 @@ config.isDemo = {
   payments: config.payments.provider === 'mock' || !config.payments.stripe.secretKey,
   email: config.email.transport === 'log',
   assistant: !config.assistant.hasKey,
+  crm:
+    config.crm.provider === 'log' ||
+    (config.crm.provider === 'brevo' && !config.crm.brevo.apiKey) ||
+    (config.crm.provider === 'hubspot' && !config.crm.hubspot.token),
 };
 
 module.exports = config;

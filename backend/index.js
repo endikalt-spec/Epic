@@ -10,6 +10,8 @@ const fraud = require('./fraud');
 const { getGateway, SUPPORTED_METHODS } = require('./payments');
 const { sendVoucherEmail } = require('./email');
 const assistant = require('./assistant');
+const customers = require('./customers');
+const crm = require('./crm');
 
 const app = express();
 const port = config.port;
@@ -119,7 +121,11 @@ app.get('/api/payments/config', (_req, res) => {
 
 // ─────────────────────────── CHECKOUT → VOUCHER ───────────────────────────
 app.post('/api/checkout', async (req, res) => {
-  const { experienceIds, method = 'card', recipient = null, buyerEmail, voucherType = 'bearer', cardLast4, amount: amountHint } = req.body || {};
+  const {
+    experienceIds, method = 'card', recipient = null, buyerEmail, buyerName,
+    voucherType = 'bearer', cardLast4, amount: amountHint, locale,
+    acceptTerms, marketingOptIn = false,
+  } = req.body || {};
   if (!Array.isArray(experienceIds) || experienceIds.length === 0 || experienceIds.length > 5) {
     return res.status(400).json({ error: 'Invalid experience selection (1-5 required)' });
   }
@@ -129,15 +135,22 @@ app.post('/api/checkout', async (req, res) => {
   }
   const deliverTo = buyerEmail || recipient?.email;
   if (!deliverTo) return res.status(400).json({ error: 'An email is required to deliver the voucher' });
+  // A purchase requires accepting the Terms of Use & Privacy Policy (recorded
+  // with a full audit trail below). This is both a business and legal gate.
+  if (acceptTerms !== true) return res.status(400).json({ error: 'terms_not_accepted' });
 
   try {
-    // Amount: sum experience prices from the DB, or trust the client hint if DB is down.
-    let amount = await dbSafe(async () => {
-      const r = await db.query('SELECT COALESCE(SUM(price),0) AS total FROM experiences WHERE id = ANY($1)', [experienceIds]);
-      return Number(r.rows[0].total);
+    // Fetch catalog rows once: used for the amount, the email title and the
+    // order line-item snapshot stored on the CRM order record.
+    const rows = await dbSafe(async () => {
+      const r = await db.query('SELECT id, title_he, price FROM experiences WHERE id = ANY($1)', [experienceIds]);
+      return r.rows;
     }, null);
+    let amount = rows ? rows.reduce((s, r) => s + Number(r.price), 0) : 0;
     if (!amount) amount = Number(amountHint) || 0;
     if (amount <= 0) return res.status(400).json({ error: 'Could not determine order amount' });
+    const items = (rows || []).map((r) => ({ id: r.id, title: r.title_he, price: Number(r.price) }));
+    const title = rows?.[0]?.title_he || null;
 
     // 1) Charge via the gateway. Only proceed on a real success.
     const gateway = getGateway();
@@ -150,23 +163,36 @@ app.post('/api/checkout', async (req, res) => {
     const voucher = await vouchers.issue({ type: voucherType, recipient });
 
     // 3) Persist payment + voucher (best-effort; the voucher is self-verifiable via its signature).
+    let paymentDbId = null;
     await dbSafe(async () => {
       const p = await db.query(
         'INSERT INTO payments (provider,provider_ref,amount,currency,method,status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
         [gateway.name, payment.id, amount, config.payments.currency, method, 'succeeded']);
+      paymentDbId = p.rows[0].id;
       await db.query(
         `INSERT INTO vouchers (code,token,signature,type,status,recipient_ref,recipient_email,recipient_name,buyer_email,buyer_user_id,payment_id,option_ids,face_value,expires_at)
          VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [voucher.code, voucher.token, voucher.signature, voucher.type, voucher.recipientRef,
          recipient?.email || null, recipient?.name || null, deliverTo, req.user?.sub || null,
-         p.rows[0].id, experienceIds, amount, voucher.expiresAt]);
+         paymentDbId, experienceIds, amount, voucher.expiresAt]);
     });
 
+    // 3b) Record the customer, consent (terms + marketing) and the order — the
+    // built-in CRM. Then mirror the customer & purchase into the external CRM/ESP.
+    const buyer = { email: deliverTo, name: buyerName || req.user?.name || recipient?.name, locale };
+    await dbSafe(() => customers.recordPurchase(db, {
+      user: req.user, email: deliverTo, name: buyer.name, locale,
+      ip: clientIp(req), userAgent: req.headers['user-agent'],
+      acceptTerms: true, marketingOptIn: !!marketingOptIn,
+      order: {
+        voucherCode: voucher.code, paymentId: paymentDbId, amount,
+        currency: config.payments.currency, method, voucherType, items,
+      },
+    }));
+    crm.identify({ email: deliverTo, name: buyer.name, locale, marketingOptIn: !!marketingOptIn });
+    crm.trackPurchase({ email: deliverTo, buyerName: buyer.name, locale, amount, currency: config.payments.currency, voucherCode: voucher.code, items });
+
     // 4) Email the e-voucher.
-    const title = await dbSafe(async () => {
-      const r = await db.query('SELECT title_he FROM experiences WHERE id = ANY($1) LIMIT 1', [experienceIds]);
-      return r.rows[0]?.title_he;
-    }, null);
     const email = await sendVoucherEmail({ to: deliverTo, voucher, experienceTitle: title, buyerName: req.user?.name });
 
     res.json({
@@ -297,6 +323,75 @@ app.post('/api/assistant', async (req, res) => {
   }
 });
 
+// ─────────────────────────── CUSTOMER SELF-SERVICE ───────────────────────────
+// The signed-in customer can see their own purchases and change their marketing
+// consent (easy opt-out is legally required for marketing email in Israel).
+app.get('/api/me/orders', async (req, res) => {
+  if (!req.user?.sub) return res.status(401).json({ error: 'auth_required' });
+  const data = await dbSafe(() => customers.getCustomer(db, req.user.sub), undefined);
+  if (data === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  if (!data) return res.json({ customer: null, orders: [], consents: [] });
+  res.json(data);
+});
+
+app.post('/api/me/consent', async (req, res) => {
+  if (!req.user?.sub) return res.status(401).json({ error: 'auth_required' });
+  const { marketingOptIn } = req.body || {};
+  if (typeof marketingOptIn !== 'boolean') return res.status(400).json({ error: 'marketingOptIn (boolean) required' });
+  const ok = await dbSafe(async () => {
+    await db.query(
+      `UPDATE users SET marketing_opt_in = $2, marketing_opt_in_at = CASE WHEN $2 THEN CURRENT_TIMESTAMP ELSE marketing_opt_in_at END WHERE id = $1`,
+      [req.user.sub, marketingOptIn]);
+    await customers.recordConsent(db, {
+      userId: req.user.sub, email: req.user.email, kind: 'marketing', granted: marketingOptIn,
+      version: config.policyVersion, source: 'account_settings', ip: clientIp(req), userAgent: req.headers['user-agent'],
+    });
+    return true;
+  }, null);
+  if (!ok) return res.status(503).json({ error: 'DB unavailable' });
+  crm.updateConsent({ email: req.user.email, name: req.user.name }, { marketingOptIn });
+  res.json({ ok: true, marketingOptIn });
+});
+
+// ─────────────────────────── ADMIN (CRM back-office) ───────────────────────────
+// Protected by a shared admin token. Disabled entirely when ADMIN_TOKEN is unset.
+function requireAdmin(req, res, next) {
+  if (!config.adminToken) return res.status(403).json({ error: 'admin_disabled' });
+  const t = req.headers['x-admin-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (t !== config.adminToken) return res.status(401).json({ error: 'unauthorized' });
+  next();
+}
+
+app.get('/api/admin/stats', requireAdmin, async (_req, res) => {
+  const data = await dbSafe(() => customers.stats(db), undefined);
+  if (data === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  res.json(data);
+});
+
+app.get('/api/admin/customers', requireAdmin, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Number(req.query.offset) || 0;
+  const q = (req.query.q || '').toString().slice(0, 100);
+  const data = await dbSafe(() => customers.listCustomers(db, { limit, offset, q }), undefined);
+  if (data === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  res.json(data);
+});
+
+app.get('/api/admin/customers/:id', requireAdmin, async (req, res) => {
+  const data = await dbSafe(() => customers.getCustomer(db, req.params.id), undefined);
+  if (data === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  if (!data) return res.status(404).json({ error: 'not_found' });
+  res.json(data);
+});
+
+app.get('/api/admin/orders', requireAdmin, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
+  const offset = Number(req.query.offset) || 0;
+  const data = await dbSafe(() => customers.listOrders(db, { limit, offset }), undefined);
+  if (data === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  res.json(data);
+});
+
 app.listen(port, () => {
-  console.log(`VAU API on :${port}  (payments=${getGateway().name}, assistant=${config.isDemo.assistant ? 'rules' : 'claude'}, email=${config.email.transport})`);
+  console.log(`VAU API on :${port}  (payments=${getGateway().name}, assistant=${config.isDemo.assistant ? 'rules' : 'claude'}, email=${config.email.transport}, crm=${crm.getCrm().name})`);
 });

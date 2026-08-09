@@ -119,6 +119,49 @@ face value, not refunded).
 
 ---
 
+## 8. Customers, consent & CRM
+
+The goal: after a customer signs in and buys, the business can see **who bought
+what, for how much, and when**, with the marketing/terms consent captured
+correctly for Israeli law — without building a CRM UI from scratch.
+
+**Architecture — hybrid (own DB + pluggable external CRM):**
+
+- **Own Postgres is the system of record.** This is required, not optional:
+  Israeli anti-spam law (Communications Law **Amendment 40**) demands explicit,
+  revocable marketing opt-in, and the Privacy Protection Law (+ **Amendment 13**)
+  demands recorded consent. So every consent is stored with **timestamp, IP,
+  user-agent and policy version** in an append-only `consents` audit table. You
+  also own the customer data rather than renting it from a vendor.
+- **A ready-made CRM/ESP is the engagement layer** (campaigns, segments,
+  newsletters), connected through `crm.js` — the same demo→real pattern as the
+  payment gateway. Default provider is `log` (prints intended syncs, no keys);
+  set `CRM_PROVIDER=brevo` (recommended for Israel) or `hubspot` with an API key
+  to go live. CRM sync is fire-and-forget and **never blocks or breaks checkout**.
+
+**What happens on purchase** (`customers.recordPurchase`, one DB transaction):
+1. Upsert the customer (`users`) — a logged-in buyer is keyed by their auth id;
+   a guest is keyed by `guest:<emailHash>` so repeat guest orders aggregate.
+2. Accepting **Terms + Privacy is mandatory** to buy (checkout returns
+   `terms_not_accepted` otherwise) and is stamped on the customer + audited.
+3. Marketing opt-in is **optional and explicit**, and always audited (grant or
+   refuse).
+4. The order is written to `orders` with an item snapshot `[{id,title,price}]`,
+   and the customer's lifetime `orders_count` / `total_spent` are updated.
+
+**Self-service (legally required easy opt-out):** a signed-in customer can view
+their own orders/consents (`GET /api/me/orders`) and revoke or re-grant marketing
+consent (`POST /api/me/consent`) — the change is audited with `source=account_settings`.
+
+**Back-office (CRM read API):** `/api/admin/*` endpoints list customers, open a
+customer card (profile + orders + full consent history), list orders, and show
+totals. Protected by an `ADMIN_TOKEN` shared secret; when the token is unset the
+admin API is **disabled entirely** rather than exposed with a weak default.
+
+`config.isDemo.crm` is `true` until a real CRM provider + key is configured.
+
+---
+
 ## API surface (added)
 
 ```
@@ -130,9 +173,17 @@ POST /api/auth/demo                        { provider, name, email? }
 GET  /api/auth/me
 GET  /api/payments/config
 POST /api/payments/webhook                 (raw body; Stripe signature)
-POST /api/checkout                         { experienceIds, method, recipient, buyerEmail, voucherType, cardLast4 }
+POST /api/checkout                         { experienceIds, method, recipient, buyerEmail, buyerName?, voucherType, cardLast4, acceptTerms, marketingOptIn?, locale? }
 POST /api/vouchers/activate                { code, token?, signature?, recipient? }
 POST /api/vouchers/redeem                  { code, experienceId, token?, signature?, recipient? }
 POST /api/vouchers/exchange                { code, experienceId, method, cardLast4?, quoteOnly?, token?, signature?, recipient? }
 POST /api/assistant                        { messages, recipient?, catalog, lang }
+
+GET  /api/me/orders                        (auth) → { customer, orders, consents }
+POST /api/me/consent                       (auth) { marketingOptIn: boolean }
+
+GET  /api/admin/stats                      (X-Admin-Token) → totals
+GET  /api/admin/customers?q=&limit=&offset=(X-Admin-Token) → customer list
+GET  /api/admin/customers/:id              (X-Admin-Token) → profile + orders + consents
+GET  /api/admin/orders?limit=&offset=      (X-Admin-Token) → recent orders
 ```

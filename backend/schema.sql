@@ -49,14 +49,50 @@ CREATE TABLE IF NOT EXISTS certificate_options (
     PRIMARY KEY (certificate_id, experience_id)
 );
 
--- ── Accounts (Google / Apple sign-in) ──
+-- ── Accounts / customers (Google / Apple sign-in, plus guest buyers) ──
+-- This table doubles as the lightweight built-in CRM "customer" record: it is
+-- the system of record for who the customer is and their current consent state.
 CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,           -- e.g. google:123 / apple:abc
+    id TEXT PRIMARY KEY,           -- e.g. google:123 / apple:abc / guest:<hash>
     email TEXT,
     name TEXT,
-    provider TEXT,                 -- google | apple
+    phone TEXT,
+    provider TEXT,                 -- google | apple | guest
+    locale TEXT,                   -- he | ru (last seen UI language)
+    -- Marketing consent (Israeli Communications Law Amendment 40 / anti-spam):
+    -- opt-in must be explicit and revocable, and we keep the current state here
+    -- plus a full audit trail in the consents table below.
+    marketing_opt_in BOOLEAN DEFAULT FALSE,
+    marketing_opt_in_at TIMESTAMP,
+    -- Terms of Use / Privacy Policy acceptance (current state).
+    terms_accepted_at TIMESTAMP,
+    terms_version TEXT,
+    privacy_version TEXT,
+    -- Denormalized lifetime totals for fast CRM listing (kept in sync on order).
+    orders_count INTEGER DEFAULT 0,
+    total_spent INTEGER DEFAULT 0,
+    currency TEXT DEFAULT 'ILS',
+    first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_order_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ── Consent audit trail (append-only) ──
+-- Every acceptance/refusal is recorded with when, from where, and which policy
+-- version — the evidence required by Israeli privacy & anti-spam law.
+CREATE TABLE IF NOT EXISTS consents (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),
+    email TEXT,
+    kind TEXT NOT NULL,            -- terms | privacy | marketing
+    granted BOOLEAN NOT NULL,      -- true = accepted/opted-in, false = revoked
+    policy_version TEXT,
+    source TEXT,                   -- checkout | account_settings | unsubscribe | ...
+    ip TEXT,
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_consents_user ON consents(user_id);
 
 -- ── Payments (gateway records) ──
 CREATE TABLE IF NOT EXISTS payments (
@@ -101,3 +137,22 @@ CREATE TABLE IF NOT EXISTS redemption_attempts (
     result TEXT,                   -- ok | not_found | already_redeemed | bad_signature | ...
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ── Orders (CRM purchase record: who bought what, for how much, when) ──
+-- Defined last because it references both users and payments.
+CREATE TABLE IF NOT EXISTS orders (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT REFERENCES users(id),
+    email TEXT,
+    voucher_code TEXT,
+    payment_id INTEGER REFERENCES payments(id),
+    amount INTEGER NOT NULL,
+    currency TEXT DEFAULT 'ILS',
+    method TEXT,                   -- card | apple_pay | google_pay
+    voucher_type TEXT,             -- personalized | bearer
+    items JSONB DEFAULT '[]',      -- snapshot: [{id,title,price}] at purchase time
+    status TEXT DEFAULT 'paid',    -- paid | refunded | ...
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email);
