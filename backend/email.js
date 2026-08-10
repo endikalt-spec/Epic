@@ -1,8 +1,32 @@
 // E-voucher email delivery. Sends the digital voucher to the email the buyer
-// entered at checkout. Uses SMTP when configured; otherwise logs to the console
-// so the flow is fully testable without a mail server.
+// entered at checkout. Transports:
+//   log   (default) — prints a summary; fully testable without a mail server.
+//   brevo           — Brevo transactional email API (reuses BREVO_API_KEY).
+//   smtp            — any SMTP server via nodemailer.
 const nodemailer = require('nodemailer');
 const config = require('./config');
+
+// Parse "VAU <no-reply@vau.co.il>" into a { name, email } sender.
+function parseSender(from) {
+  const m = /^\s*"?(.*?)"?\s*<([^>]+)>\s*$/.exec(from || '');
+  return m ? { name: m[1].trim(), email: m[2].trim() } : { email: (from || '').trim() };
+}
+
+// Brevo transactional email. The sender address/domain must be verified in the
+// Brevo account first, otherwise Brevo rejects the send.
+async function sendViaBrevo({ to, subject, html }) {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: { 'api-key': config.crm.brevo.apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: JSON.stringify({ sender: parseSender(config.email.from), to: [{ email: to }], subject, htmlContent: html }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Brevo email ${res.status} ${t}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  return { delivered: true, to, messageId: data.messageId };
+}
 
 let transporter = null;
 function getTransport() {
@@ -50,6 +74,17 @@ function voucherEmailHtml({ voucher, experienceTitle, buyerName }) {
 async function sendVoucherEmail({ to, voucher, experienceTitle, buyerName }) {
   const html = voucherEmailHtml({ voucher, experienceTitle, buyerName });
   const subject = '🎁 VAU — השובר שלך / Ваш ваучер';
+
+  // Brevo transactional API (reuses BREVO_API_KEY).
+  if (config.email.transport === 'brevo') {
+    try {
+      return await sendViaBrevo({ to, subject, html });
+    } catch (e) {
+      console.error('[email:brevo]', e.message);
+      return { delivered: false, error: e.message, to };
+    }
+  }
+
   const transport = getTransport();
   if (!transport) {
     // Demo mode: log a summary instead of sending.
