@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "init-db": "node init-db.js"
+    "init-db": "node init-db.js",
+    "crm:setup": "node scripts/brevo-setup.js",
+    "crm:test": "node scripts/brevo-test.js"
   },
   "keywords": [],
   "author": "",

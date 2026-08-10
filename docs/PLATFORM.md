@@ -163,6 +163,23 @@ admin API is **disabled entirely** rather than exposed with a weak default.
 
 `config.isDemo.crm` is `true` until a real CRM provider + key is configured.
 
+**Enabling Brevo (recommended):**
+1. In `backend/.env` set `CRM_PROVIDER=brevo` and `BREVO_API_KEY=...` (the key
+   is a secret — `.env` is git-ignored; never commit it).
+2. Run `npm run crm:setup` once — it validates the key, creates the custom
+   contact attributes the adapter writes (`LOCALE`, `LAST_ORDER_AMOUNT`,
+   `LAST_ORDER_AT`), and can create a "VAU Marketing" list (prints the id to put
+   in `BREVO_LIST_ID`).
+3. Run `npm run crm:test` to smoke-test end-to-end: it upserts a test contact,
+   reads it back, and verifies opt-out maps to `emailBlacklisted`.
+
+Both scripts must run from an environment that can reach `api.brevo.com` (the
+Claude Code on the web sandbox blocks outbound calls to it by policy, so run
+them from your own machine or deployment). Consent mapping: an opted-in contact
+is added to the list with `emailBlacklisted=false`; an opt-out sets
+`emailBlacklisted=true`; a purchase sync with unknown consent never changes the
+subscription state, so it can't silently re-subscribe someone who opted out.
+
 ---
 
 ## 9. Businesses, reviews & loyalty (VAU Club)

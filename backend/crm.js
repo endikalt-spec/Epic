@@ -44,31 +44,53 @@ const logAdapter = {
 };
 
 // ─────────────────────────── BREVO ADAPTER ───────────────────────────
-// Docs: https://developers.brevo.com/reference/createcontact
-function brevoAdapter() {
-  const { apiKey, listId } = config.crm.brevo;
-  const call = (path, method, body) =>
-    fetch('https://api.brevo.com/v3' + path, {
-      method,
-      headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+// Brevo (ex-Sendinblue) Contacts API. Docs: https://developers.brevo.com/reference/createcontact
+// The custom attributes LOCALE / LAST_ORDER_AMOUNT / LAST_ORDER_AT must exist in
+// the Brevo account first — run `npm run crm:setup` once to create them (and,
+// optionally, a marketing list). Standard attributes FIRSTNAME/LASTNAME/SMS
+// always exist. Consent maps to list membership + emailBlacklisted.
+function brevoCall(path, method, body) {
+  return fetch('https://api.brevo.com/v3' + path, {
+    method,
+    headers: { 'api-key': config.crm.brevo.apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
 
+// Assemble a Brevo contact payload from our customer/order shape.
+function brevoContactBody(customer, extraAttributes = {}) {
+  const { listId } = config.crm.brevo;
+  const [firstname, ...rest] = String(customer.name || '').trim().split(/\s+/);
+  const attributes = { ...extraAttributes };
+  if (firstname) attributes.FIRSTNAME = firstname;
+  if (rest.length) attributes.LASTNAME = rest.join(' ');
+  if (customer.locale) attributes.LOCALE = customer.locale;
+  // Brevo's SMS attribute requires an international (E.164-ish) number; only
+  // send it when it plausibly is one, otherwise Brevo rejects the whole upsert.
+  if (customer.phone && /^\+?[0-9]{7,15}$/.test(String(customer.phone).replace(/[\s()-]/g, ''))) {
+    attributes.SMS = String(customer.phone).replace(/[\s()-]/g, '');
+  }
+  const body = { email: customer.email, updateEnabled: true, attributes };
+  // Only touch the marketing subscription when consent is explicitly known —
+  // otherwise a later purchase sync would silently re-subscribe an opted-out
+  // contact (emailBlacklisted must not be sent when marketingOptIn is unknown).
+  if (typeof customer.marketingOptIn === 'boolean') {
+    body.emailBlacklisted = !customer.marketingOptIn;
+    if (customer.marketingOptIn && listId) body.listIds = [Number(listId)];
+  }
+  return body;
+}
+
+function brevoAdapter() {
   async function upsert(customer, extraAttributes = {}) {
-    if (!customer.email) return;
-    const body = {
-      email: customer.email,
-      updateEnabled: true,
-      attributes: { FIRSTNAME: customer.name || '', SMS: customer.phone || '', LOCALE: customer.locale || '', ...extraAttributes },
-      // Brevo models marketing consent via list membership + emailBlacklisted.
-      emailBlacklisted: customer.marketingOptIn === false,
-      ...(listId ? { listIds: [Number(listId)] } : {}),
-    };
-    const res = await call('/contacts', 'POST', body);
+    if (!customer.email) return { skipped: true };
+    const res = await brevoCall('/contacts', 'POST', brevoContactBody(customer, extraAttributes));
     if (!res.ok && res.status !== 204) {
       const txt = await res.text().catch(() => '');
       console.error('[crm:brevo] upsert failed', res.status, txt);
+      return { ok: false, status: res.status };
     }
+    return { ok: true, status: res.status };
   }
 
   return {
@@ -76,8 +98,8 @@ function brevoAdapter() {
     identify: (customer) => upsert(customer),
     trackPurchase: (order) =>
       upsert(
-        { email: order.email, name: order.buyerName, locale: order.locale, marketingOptIn: undefined },
-        { LAST_ORDER_AMOUNT: order.amount, LAST_ORDER_AT: new Date().toISOString() }
+        { email: order.email, name: order.buyerName, locale: order.locale },
+        { LAST_ORDER_AMOUNT: order.amount, LAST_ORDER_AT: new Date().toISOString().slice(0, 10) }
       ),
     updateConsent: (customer, { marketingOptIn }) =>
       upsert({ ...customer, marketingOptIn }),
