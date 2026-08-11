@@ -13,6 +13,9 @@ const assistant = require('./assistant');
 const customers = require('./customers');
 const crm = require('./crm');
 const reviews = require('./reviews');
+const admin = require('./admin');
+const { sendSms } = require('./sms');
+const QRCode = require('qrcode');
 
 const app = express();
 const port = config.port;
@@ -527,20 +530,203 @@ app.post('/api/reviews', async (req, res) => {
   res.status(201).json(result.review);
 });
 
-// ─────────────────────────── ADMIN (CRM back-office) ───────────────────────────
-// Protected by a shared admin token. Disabled entirely when ADMIN_TOKEN is unset.
+// ─────────────────────────── ADMIN AUTH & BACK-OFFICE ───────────────────────────
 const crypto = require('crypto');
 function timingSafeEqual(a, b) {
   const ab = Buffer.from(String(a)); const bb = Buffer.from(String(b));
   if (ab.length !== bb.length) return false;
   return crypto.timingSafeEqual(ab, bb);
 }
+// Accept a logged-in admin session (Bearer JWT with adm:true) OR the break-glass
+// X-Admin-Token. Attaches req.admin when a session token is used.
 function requireAdmin(req, res, next) {
-  if (!config.adminToken) return res.status(403).json({ error: 'admin_disabled' });
-  const t = req.headers['x-admin-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!timingSafeEqual(t, config.adminToken)) return res.status(401).json({ error: 'unauthorized' });
-  next();
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const session = bearer && admin.verifyAdminToken(bearer);
+  if (session) { req.admin = session; return next(); }
+  const tok = req.headers['x-admin-token'] || bearer;
+  if (config.adminToken && timingSafeEqual(tok, config.adminToken)) return next();
+  return res.status(401).json({ error: 'unauthorized' });
 }
+
+// Ensure at least one admin exists (bootstrap). Called at startup.
+async function ensureBootstrapAdmin() {
+  const { email, password, phone } = config.adminBootstrap;
+  if (!email || !password) return;
+  try {
+    const exists = (await db.query('SELECT 1 FROM admin_users LIMIT 1')).rowCount;
+    if (exists) return;
+    await db.query(
+      'INSERT INTO admin_users (email,name,password_hash,phone,role) VALUES ($1,$2,$3,$4,$5)',
+      [email.toLowerCase(), 'Owner', admin.hashPassword(password), phone || null, 'superadmin']);
+    console.log(`[admin] bootstrapped first admin: ${email}`);
+  } catch (e) { console.error('[admin] bootstrap failed:', e.message); }
+}
+
+const adminAudit = (email, ip, result) =>
+  dbSafe(() => db.query('INSERT INTO admin_login_attempts (email,ip,result) VALUES ($1,$2,$3)', [email || null, ip, result]));
+
+// ── Admin login (password + optional TOTP; account lockout after 3 fails) ──
+app.post('/api/admin/auth/login', async (req, res) => {
+  const ip = clientIp(req);
+  if (fraud.tooManyAttempts(`admin-login:${ip}`, { max: 15 })) return res.status(429).json({ error: 'too_many_attempts' });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const { password, totp } = req.body || {};
+
+  const row = await dbTry(() => db.query('SELECT * FROM admin_users WHERE email=$1', [email]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  // Generic response for unknown user (no account enumeration).
+  if (!row) { await adminAudit(email, ip, 'unknown_user'); return res.status(401).json({ error: 'invalid_credentials' }); }
+
+  if (admin.isLocked(row)) {
+    await adminAudit(email, ip, 'locked');
+    return res.status(423).json({ error: 'locked', until: row.locked_until });
+  }
+
+  if (!admin.verifyPassword(password, row.password_hash)) {
+    const failed = (row.failed_attempts || 0) + 1;
+    const locked = admin.lockoutState(failed);
+    await dbSafe(() => db.query('UPDATE admin_users SET failed_attempts=$2, locked_until=$3 WHERE id=$1', [row.id, failed, locked]));
+    await adminAudit(email, ip, 'bad_password');
+    if (locked) return res.status(423).json({ error: 'locked', until: locked, message: `Too many attempts. Locked for ${admin.LOCK_MINUTES} minutes.` });
+    return res.status(401).json({ error: 'invalid_credentials', attemptsLeft: admin.MAX_FAILED - failed });
+  }
+
+  // Password OK — enforce 2FA if enrolled.
+  if (row.totp_enabled) {
+    if (!totp) return res.json({ needs2fa: true });
+    if (!admin.verifyTotp(row.totp_secret, totp)) {
+      const failed = (row.failed_attempts || 0) + 1;
+      const locked = admin.lockoutState(failed);
+      await dbSafe(() => db.query('UPDATE admin_users SET failed_attempts=$2, locked_until=$3 WHERE id=$1', [row.id, failed, locked]));
+      await adminAudit(email, ip, 'bad_2fa');
+      if (locked) return res.status(423).json({ error: 'locked', until: locked });
+      return res.status(401).json({ error: 'invalid_2fa', attemptsLeft: admin.MAX_FAILED - failed });
+    }
+  }
+
+  await dbSafe(() => db.query('UPDATE admin_users SET failed_attempts=0, locked_until=NULL, last_login_at=CURRENT_TIMESTAMP WHERE id=$1', [row.id]));
+  await adminAudit(email, ip, 'ok');
+  const token = admin.issueAdminToken(row);
+  res.json({ token, admin: { id: row.id, email: row.email, name: row.name, role: row.role, twoFactorEnabled: !!row.totp_enabled } });
+});
+
+app.get('/api/admin/auth/me', requireAdmin, async (req, res) => {
+  if (!req.admin) return res.json({ admin: { tokenAuth: true } }); // break-glass token
+  const row = await dbTry(() => db.query('SELECT id,email,name,role,phone,totp_enabled,last_login_at FROM admin_users WHERE id=$1', [req.admin.sub]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  if (!row) return res.status(401).json({ error: 'unauthorized' });
+  res.json({ admin: { ...row, twoFactorEnabled: row.totp_enabled } });
+});
+
+// ── 2FA enrollment ──
+app.post('/api/admin/auth/2fa/setup', requireAdmin, async (req, res) => {
+  if (!req.admin) return res.status(400).json({ error: 'session_required' });
+  const secret = admin.generateTotpSecret();
+  const row = await dbTry(() => db.query('SELECT email FROM admin_users WHERE id=$1', [req.admin.sub]).then((r) => r.rows[0]));
+  if (row === DB_ERROR || !row) return res.status(503).json({ error: 'DB unavailable' });
+  await dbSafe(() => db.query('UPDATE admin_users SET totp_secret=$2 WHERE id=$1', [req.admin.sub, secret]));
+  const uri = admin.totpUri(row.email, secret);
+  const qr = await QRCode.toDataURL(uri).catch(() => null);
+  res.json({ secret, uri, qr });
+});
+
+app.post('/api/admin/auth/2fa/enable', requireAdmin, async (req, res) => {
+  if (!req.admin) return res.status(400).json({ error: 'session_required' });
+  const row = await dbTry(() => db.query('SELECT totp_secret FROM admin_users WHERE id=$1', [req.admin.sub]).then((r) => r.rows[0]));
+  if (row === DB_ERROR || !row) return res.status(503).json({ error: 'DB unavailable' });
+  if (!admin.verifyTotp(row.totp_secret, req.body?.totp)) return res.status(400).json({ error: 'invalid_2fa' });
+  await dbSafe(() => db.query('UPDATE admin_users SET totp_enabled=TRUE WHERE id=$1', [req.admin.sub]));
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/auth/2fa/disable', requireAdmin, async (req, res) => {
+  if (!req.admin) return res.status(400).json({ error: 'session_required' });
+  const row = await dbTry(() => db.query('SELECT password_hash FROM admin_users WHERE id=$1', [req.admin.sub]).then((r) => r.rows[0]));
+  if (row === DB_ERROR || !row) return res.status(503).json({ error: 'DB unavailable' });
+  if (!admin.verifyPassword(req.body?.password, row.password_hash)) return res.status(401).json({ error: 'invalid_credentials' });
+  await dbSafe(() => db.query('UPDATE admin_users SET totp_enabled=FALSE, totp_secret=NULL WHERE id=$1', [req.admin.sub]));
+  res.json({ ok: true });
+});
+
+// ── Account recovery via SMS one-time code ──
+app.post('/api/admin/auth/recover/start', async (req, res) => {
+  const ip = clientIp(req);
+  if (fraud.tooManyAttempts(`admin-recover:${ip}`, { max: 5 })) return res.status(429).json({ error: 'too_many_attempts' });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const row = await dbTry(() => db.query('SELECT id,phone FROM admin_users WHERE email=$1', [email]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  // Always respond the same way (no enumeration). Only send if the account+phone exist.
+  if (row?.phone) {
+    const code = admin.generateNumericCode(6);
+    const expires = new Date(Date.now() + admin.RECOVERY_TTL_MIN * 60000);
+    await dbSafe(() => db.query('INSERT INTO admin_recovery (admin_id,code_hash,expires_at) VALUES ($1,$2,$3)', [row.id, admin.hashCode(code), expires]));
+    await sendSms(row.phone, `VAU admin recovery code: ${code} (valid ${admin.RECOVERY_TTL_MIN} min)`);
+  }
+  res.json({ ok: true, message: 'If the account exists and has a phone on file, a code was sent.' });
+});
+
+app.post('/api/admin/auth/recover/verify', async (req, res) => {
+  const ip = clientIp(req);
+  if (fraud.tooManyAttempts(`admin-recover:${ip}`, { max: 10 })) return res.status(429).json({ error: 'too_many_attempts' });
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const { code, newPassword } = req.body || {};
+  if (!newPassword || String(newPassword).length < 8) return res.status(400).json({ error: 'weak_password' });
+  const row = await dbTry(() => db.query('SELECT id FROM admin_users WHERE email=$1', [email]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  if (!row) return res.status(400).json({ error: 'invalid_code' });
+  const rec = await dbTry(() => db.query(
+    'SELECT * FROM admin_recovery WHERE admin_id=$1 AND used=FALSE AND expires_at>NOW() ORDER BY created_at DESC LIMIT 1',
+    [row.id]).then((r) => r.rows[0]));
+  if (rec === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  if (!rec || rec.code_hash !== admin.hashCode(code)) return res.status(400).json({ error: 'invalid_code' });
+  await dbSafe(async () => {
+    await db.query('UPDATE admin_recovery SET used=TRUE WHERE id=$1', [rec.id]);
+    await db.query('UPDATE admin_users SET password_hash=$2, failed_attempts=0, locked_until=NULL WHERE id=$1', [row.id, admin.hashPassword(newPassword)]);
+  });
+  res.json({ ok: true });
+});
+
+// ── Business management (media + description) ──
+const adminJson = express.json({ limit: '8mb' }); // media data URIs can be large
+app.get('/api/admin/businesses', requireAdmin, async (_req, res) => {
+  const rows = await dbTry(() => db.query('SELECT * FROM businesses ORDER BY id ASC').then((r) => r.rows));
+  if (rows === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  res.json(rows);
+});
+
+const BIZ_FIELDS = ['slug', 'name_he', 'name_ru', 'description_he', 'description_ru', 'location_he', 'location_ru', 'emoji', 'img', 'logo', 'video_url', 'since', 'rating'];
+app.post('/api/admin/businesses', requireAdmin, adminJson, async (req, res) => {
+  const b = req.body || {};
+  if (!b.slug || !b.name_he || !b.name_ru) return res.status(400).json({ error: 'slug, name_he, name_ru required' });
+  const vals = BIZ_FIELDS.map((f) => b[f] ?? null);
+  const cols = BIZ_FIELDS.join(',');
+  const ph = BIZ_FIELDS.map((_, i) => `$${i + 1}`).join(',');
+  const row = await dbTry(() => db.query(`INSERT INTO businesses (${cols}) VALUES (${ph}) RETURNING *`, vals).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(400).json({ error: 'insert_failed' });
+  res.status(201).json(row);
+});
+
+app.put('/api/admin/businesses/:id', requireAdmin, adminJson, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad_id' });
+  const b = req.body || {};
+  const fields = BIZ_FIELDS.filter((f) => f in b);
+  if (!fields.length) return res.status(400).json({ error: 'no_fields' });
+  const set = fields.map((f, i) => `${f}=$${i + 2}`).join(',');
+  const vals = [id, ...fields.map((f) => b[f])];
+  const row = await dbTry(() => db.query(`UPDATE businesses SET ${set} WHERE id=$1 RETURNING *`, vals).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(400).json({ error: 'update_failed' });
+  if (!row) return res.status(404).json({ error: 'not_found' });
+  res.json(row);
+});
+
+app.delete('/api/admin/businesses/:id', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'bad_id' });
+  const done = await dbTry(() => db.query('DELETE FROM businesses WHERE id=$1 RETURNING id', [id]).then((r) => r.rows[0]));
+  if (done === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+  res.json({ ok: !!done });
+});
 
 app.get('/api/admin/stats', requireAdmin, async (_req, res) => {
   const data = await dbSafe(() => customers.stats(db), undefined);
@@ -573,6 +759,7 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
 });
 
 const server = app.listen(port, () => {
+  ensureBootstrapAdmin();
   console.log(`VAU API on :${port}  (payments=${getGateway().name}, assistant=${config.isDemo.assistant ? 'rules' : 'claude'}, email=${config.email.transport}, crm=${crm.getCrm().name})`);
 });
 

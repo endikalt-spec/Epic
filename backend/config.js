@@ -30,9 +30,28 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'dev-insecure-jwt-secret-change-me',
   voucherSecret: process.env.VOUCHER_SECRET || 'dev-insecure-voucher-hmac-secret-change-me',
 
-  // Admin API token (protects /api/admin/* CRM read endpoints). When unset the
-  // admin API is disabled entirely rather than exposed with a weak default.
+  // Admin API token (break-glass for /api/admin/* alongside admin login). When
+  // unset, only a logged-in admin session can reach the admin API.
   adminToken: process.env.ADMIN_TOKEN || '',
+
+  // First admin, auto-created on startup if no admin exists yet. In production
+  // set a strong password; in dev it defaults so the panel is testable.
+  adminBootstrap: {
+    email: process.env.ADMIN_EMAIL || 'admin@vau.co.il',
+    password: process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'vau-admin-2026'),
+    phone: process.env.ADMIN_PHONE || '',
+  },
+
+  // SMS provider for admin recovery codes.
+  sms: {
+    provider: process.env.SMS_PROVIDER || 'log', // log | brevo | twilio
+    sender: process.env.SMS_SENDER || 'VAU',
+    twilio: {
+      accountSid: process.env.TWILIO_ACCOUNT_SID || '',
+      authToken: process.env.TWILIO_AUTH_TOKEN || '',
+      from: process.env.TWILIO_FROM || '',
+    },
+  },
 
   // Version stamped onto recorded consents so we know which document a customer
   // accepted. Bump this whenever the Terms / Privacy text changes.

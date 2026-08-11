@@ -194,3 +194,44 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 CREATE INDEX IF NOT EXISTS idx_reviews_experience ON reviews(experience_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);
+
+-- Businesses can carry a short description (exists) + media managed from the
+-- admin panel: a hero photo, a logo (exists) and a promo video URL.
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS img TEXT;
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS video_url TEXT;
+
+-- ── Admin accounts (separate from customer users; strong auth) ──
+CREATE TABLE IF NOT EXISTS admin_users (
+    id SERIAL PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    password_hash TEXT NOT NULL,        -- scrypt: "salt:hash" (hex)
+    phone TEXT,                         -- for SMS account recovery
+    totp_secret TEXT,                   -- base32 shared secret (set when enrolling 2FA)
+    totp_enabled BOOLEAN DEFAULT FALSE,
+    role TEXT DEFAULT 'admin',          -- superadmin | admin
+    failed_attempts INTEGER DEFAULT 0,  -- consecutive wrong passwords
+    locked_until TIMESTAMP,             -- lockout expiry after too many fails
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Audit trail of every admin login attempt (brute-force forensics).
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+    id SERIAL PRIMARY KEY,
+    email TEXT,
+    ip TEXT,
+    result TEXT,                        -- ok | bad_password | locked | no_2fa | bad_2fa | unknown_user
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_admin_attempts_email ON admin_login_attempts(email);
+
+-- Single-use, short-lived SMS recovery codes (hashed).
+CREATE TABLE IF NOT EXISTS admin_recovery (
+    id SERIAL PRIMARY KEY,
+    admin_id INTEGER REFERENCES admin_users(id),
+    code_hash TEXT NOT NULL,            -- HMAC of the OTP (never stored in clear)
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
