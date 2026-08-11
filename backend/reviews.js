@@ -7,8 +7,10 @@ async function listReviews(db, { experienceId = null, limit = 12 } = {}) {
   let where = "WHERE status = 'published'";
   if (experienceId === 'none') {
     where += ' AND experience_id IS NULL';
-  } else if (experienceId != null) {
-    params.push(Number(experienceId));
+  } else if (experienceId != null && experienceId !== '') {
+    const eid = Number(experienceId);
+    if (!Number.isInteger(eid)) return { error: 'invalid_experience_id' };
+    params.push(eid);
     where += ` AND experience_id = $${params.length}`;
   }
   params.push(Math.min(Number(limit) || 12, 50));

@@ -14,6 +14,18 @@ const config = {
   // Allowed CORS origins (comma-separated). Empty = allow all (dev only).
   corsOrigins: (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean),
 
+  // Express "trust proxy" — how many reverse-proxy hops to trust for the client
+  // IP (used by rate limiting & audit). Number of hops, or false when the app is
+  // directly exposed (then X-Forwarded-For is NOT honored). Set to your infra's
+  // hop count (e.g. 1 behind a single load balancer). Default: false (safe).
+  trustProxy: (() => {
+    const v = process.env.TRUST_PROXY;
+    if (v == null || v === '') return false;
+    if (/^\d+$/.test(v)) return Number(v);
+    if (/^(true|false)$/i.test(v)) return /true/i.test(v);
+    return v; // e.g. 'loopback' or a CIDR
+  })(),
+
   // Signing secrets. In production these MUST be set to strong random values.
   jwtSecret: process.env.JWT_SECRET || 'dev-insecure-jwt-secret-change-me',
   voucherSecret: process.env.VOUCHER_SECRET || 'dev-insecure-voucher-hmac-secret-change-me',
@@ -127,6 +139,9 @@ if (config.env === 'production') {
   if (problems.length) {
     console.error('FATAL: refusing to start in production —\n  - ' + problems.join('\n  - '));
     process.exit(1);
+  }
+  if (!config.corsOrigins.length) {
+    console.warn('WARNING: CORS_ORIGIN is unset in production — the API accepts requests from ANY origin. Set it to your site origin(s).');
   }
 }
 

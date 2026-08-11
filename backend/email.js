@@ -91,8 +91,15 @@ async function sendVoucherEmail({ to, voucher, experienceTitle, buyerName }) {
     console.log(`[email:demo] voucher ${voucher.code} -> ${to} (${voucher.type}) "${experienceTitle || ''}"`);
     return { delivered: false, demo: true, to };
   }
-  await transport.sendMail({ from: config.email.from, to, subject, html });
-  return { delivered: true, to };
+  // Never let a transport failure throw into checkout — the customer is already
+  // charged and has a valid voucher; a failed email must not 500 (or double-charge).
+  try {
+    await transport.sendMail({ from: config.email.from, to, subject, html });
+    return { delivered: true, to };
+  } catch (e) {
+    console.error('[email:smtp]', e.message);
+    return { delivered: false, error: e.message, to };
+  }
 }
 
 module.exports = { sendVoucherEmail, voucherEmailHtml };

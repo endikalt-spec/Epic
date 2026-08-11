@@ -17,6 +17,11 @@ const reviews = require('./reviews');
 const app = express();
 const port = config.port;
 
+// Only honor X-Forwarded-For from trusted proxy hops, so clients can't spoof
+// their IP to bypass rate limits or poison the audit log. Directly-exposed:
+// trustProxy=false → req.ip is the socket address.
+app.set('trust proxy', config.trustProxy);
+
 // Restrict CORS to the configured origins in production; allow all when none
 // are set (local dev). Auth is Bearer-token, so this limits which browser
 // origins can call the API with a stolen token.
@@ -38,8 +43,13 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), asy
 app.use(express.json());
 app.use(auth.authOptional);
 
-const clientIp = (req) => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+const clientIp = (req) => req.ip || req.socket.remoteAddress || '';
 const dbSafe = async (fn, fallback) => { try { return await fn(); } catch (e) { console.error('[db]', e.message); return fallback; } };
+// Distinct sentinel for a DB error, so callers can tell "the query threw"
+// (→ 503) apart from "the query ran and found nothing" (→ 404/409). Never
+// confuse the two: reusing `undefined` for both masks not-found as unavailable.
+const DB_ERROR = Symbol('db_error');
+const dbTry = async (fn) => { try { return await fn(); } catch (e) { console.error('[db]', e.message); return DB_ERROR; } };
 
 // Liveness: process is up. Readiness: also verifies DB connectivity so a
 // load balancer / uptime check doesn't route traffic to an instance whose DB
@@ -172,11 +182,13 @@ app.post('/api/checkout', async (req, res) => {
     return res.status(400).json({ error: 'Invalid experience id' });
   }
   if (!SUPPORTED_METHODS.includes(method)) return res.status(400).json({ error: 'Unsupported payment method' });
-  if (voucherType === 'personalized' && !recipient?.email) {
-    return res.status(400).json({ error: 'Personalized voucher requires a recipient email' });
+  if (!['bearer', 'personalized'].includes(voucherType)) return res.status(400).json({ error: 'Invalid voucher type' });
+  const emailOk = (e) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  if (voucherType === 'personalized' && !emailOk(recipient?.email)) {
+    return res.status(400).json({ error: 'Personalized voucher requires a valid recipient email' });
   }
   const deliverTo = buyerEmail || recipient?.email;
-  if (!deliverTo) return res.status(400).json({ error: 'An email is required to deliver the voucher' });
+  if (!emailOk(deliverTo)) return res.status(400).json({ error: 'A valid email is required to deliver the voucher' });
   // A purchase requires accepting the Terms of Use & Privacy Policy (recorded
   // with a full audit trail below). This is both a business and legal gate.
   if (acceptTerms !== true) return res.status(400).json({ error: 'terms_not_accepted' });
@@ -222,20 +234,41 @@ app.post('/api/checkout', async (req, res) => {
     // 2) Issue the voucher (codes, signature, QR, barcode).
     const voucher = await vouchers.issue({ type: voucherType, recipient });
 
-    // 3) Persist payment + voucher (best-effort; the voucher is self-verifiable via its signature).
+    // 3) Persist payment + voucher in ONE transaction. The card is already
+    //    charged, so if this fails we must NOT report success — we return a
+    //    distinct error carrying the gateway payment ref so the charge can be
+    //    reconciled / the voucher re-issued by support, and we don't double-issue.
     let paymentDbId = null;
-    await dbSafe(async () => {
-      const p = await db.query(
-        'INSERT INTO payments (provider,provider_ref,amount,currency,method,status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-        [gateway.name, payment.id, chargeAmount, config.payments.currency, method, 'succeeded']);
-      paymentDbId = p.rows[0].id;
-      await db.query(
-        `INSERT INTO vouchers (code,token,signature,type,status,recipient_ref,recipient_email,recipient_name,buyer_email,buyer_user_id,payment_id,option_ids,face_value,expires_at)
-         VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [voucher.code, voucher.token, voucher.signature, voucher.type, voucher.recipientRef,
-         recipient?.email || null, recipient?.name || null, deliverTo, req.user?.sub || null,
-         paymentDbId, ids, grossAmount, voucher.expiresAt]);
-    });
+    try {
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        const p = await client.query(
+          'INSERT INTO payments (provider,provider_ref,amount,currency,method,status) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+          [gateway.name, payment.id, chargeAmount, config.payments.currency, method, 'succeeded']);
+        paymentDbId = p.rows[0].id;
+        await client.query(
+          `INSERT INTO vouchers (code,token,signature,type,status,recipient_ref,recipient_email,recipient_name,buyer_email,buyer_user_id,payment_id,option_ids,face_value,expires_at)
+           VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [voucher.code, voucher.token, voucher.signature, voucher.type, voucher.recipientRef,
+           recipient?.email || null, recipient?.name || null, deliverTo, req.user?.sub || null,
+           paymentDbId, ids, grossAmount, voucher.expiresAt]);
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw e;
+      } finally {
+        client.release();
+      }
+    } catch (e) {
+      // ALERT-worthy: money was taken but we have no voucher record.
+      console.error('[checkout] PERSIST FAILED AFTER CHARGE — paymentRef=%s: %s', payment.id, e.message);
+      return res.status(500).json({
+        error: 'voucher_persist_failed',
+        paymentRef: payment.id,
+        message: 'Payment succeeded but the voucher could not be saved. Please contact support with this reference.',
+      });
+    }
 
     // 3b) Record the customer, consent (terms + marketing) and the order — the
     // built-in CRM. Then mirror the customer & purchase into the external CRM/ESP.
@@ -275,8 +308,8 @@ app.post('/api/vouchers/activate', async (req, res) => {
   const ip = clientIp(req);
   if (fraud.tooManyAttempts(`activate:${ip}`)) return res.status(429).json({ error: 'Too many attempts. Try later.' });
 
-  const row = await dbSafe(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]), undefined);
-  if (row === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  const row = await dbTry(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
 
   const check = fraud.validateRedemption(row, { token, signature, recipient });
   await dbSafe(() => db.query('INSERT INTO redemption_attempts (code,ip,result) VALUES ($1,$2,$3)', [code, ip, check.ok ? 'ok' : check.reason]));
@@ -296,8 +329,8 @@ app.post('/api/vouchers/redeem', async (req, res) => {
   const ip = clientIp(req);
   if (fraud.tooManyAttempts(`redeem:${ip}`)) return res.status(429).json({ error: 'Too many attempts. Try later.' });
 
-  const row = await dbSafe(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]), undefined);
-  if (row === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  const row = await dbTry(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
 
   const check = fraud.validateRedemption(row, { token, signature, recipient });
   if (!check.ok) {
@@ -309,10 +342,10 @@ app.post('/api/vouchers/redeem', async (req, res) => {
   }
 
   // Atomic single-use transition: only one request can flip active -> redeemed.
-  const done = await dbSafe(() => db.query(
+  const done = await dbTry(() => db.query(
     `UPDATE vouchers SET status='redeemed', selected_experience_id=$2, redeemed_at=CURRENT_TIMESTAMP
-     WHERE code=$1 AND status='active' RETURNING id`, [code, experienceId]).then((r) => r.rows[0]), undefined);
-  if (done === undefined) return res.status(503).json({ error: 'DB unavailable' });
+     WHERE code=$1 AND status='active' RETURNING id`, [code, experienceId]).then((r) => r.rows[0]));
+  if (done === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
   await dbSafe(() => db.query('INSERT INTO redemption_attempts (code,ip,result) VALUES ($1,$2,$3)', [code, ip, done ? 'ok' : 'already_redeemed']));
   if (!done) return res.status(409).json({ error: 'already_redeemed' });
   res.json({ success: true });
@@ -327,20 +360,24 @@ app.post('/api/vouchers/exchange', async (req, res) => {
   const ip = clientIp(req);
   if (fraud.tooManyAttempts(`exchange:${ip}`)) return res.status(429).json({ error: 'Too many attempts. Try later.' });
 
-  const row = await dbSafe(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]), undefined);
-  if (row === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  const row = await dbTry(() => db.query('SELECT * FROM vouchers WHERE code = $1', [code]).then((r) => r.rows[0]));
+  if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
 
   const check = fraud.validateRedemption(row, { token, signature, recipient });
   if (!check.ok) return res.status(check.reason === 'not_found' ? 404 : 400).json({ error: check.reason });
 
-  const target = await dbSafe(() => db.query('SELECT id, price FROM experiences WHERE id = $1', [experienceId]).then((r) => r.rows[0]), undefined);
-  if (target === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  const target = await dbTry(() => db.query('SELECT id, price FROM experiences WHERE id = $1', [experienceId]).then((r) => r.rows[0]));
+  if (target === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
   if (!target) return res.status(400).json({ error: 'experience_not_found' });
 
   // Face value = what the voucher is worth today; top-up covers any upgrade gap.
+  // Remember the stored column value for an optimistic-concurrency guard below.
+  const storedFace = row.face_value;
   let faceValue = Number(row.face_value);
   if (!faceValue) {
-    faceValue = await dbSafe(() => db.query('SELECT COALESCE(MAX(price),0) AS v FROM experiences WHERE id = ANY($1)', [row.option_ids]).then((r) => Number(r.rows[0].v)), 0);
+    const v = await dbTry(() => db.query('SELECT COALESCE(MAX(price),0) AS v FROM experiences WHERE id = ANY($1)', [row.option_ids]).then((r) => Number(r.rows[0].v)));
+    if (v === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
+    faceValue = v;
   }
   const newPrice = Number(target.price);
   const topUp = Math.max(0, newPrice - faceValue);
@@ -356,12 +393,16 @@ app.post('/api/vouchers/exchange', async (req, res) => {
     if (payment.status !== 'succeeded') return res.status(402).json({ error: 'Payment not completed', status: payment.status });
   }
 
-  // Atomically re-point the voucher to the new experience (only while still active).
+  // Atomically re-point the voucher to the new experience — but only while it's
+  // still active AND its face_value is unchanged since we read it. The CAS on
+  // face_value prevents two concurrent exchanges from lost-updating each other
+  // (last-write-wins); the loser gets 409 and can re-quote.
   const newFace = Math.max(faceValue, newPrice);
-  const done = await dbSafe(() => db.query(
-    `UPDATE vouchers SET option_ids = ARRAY[$2]::int[], face_value = $3 WHERE code = $1 AND status = 'active' RETURNING id`,
-    [code, experienceId, newFace]).then((r) => r.rows[0]), undefined);
-  if (done === undefined) return res.status(503).json({ error: 'DB unavailable' });
+  const done = await dbTry(() => db.query(
+    `UPDATE vouchers SET option_ids = ARRAY[$2]::int[], face_value = $3
+       WHERE code = $1 AND status = 'active' AND face_value IS NOT DISTINCT FROM $4 RETURNING id`,
+    [code, experienceId, newFace, storedFace]).then((r) => r.rows[0]));
+  if (done === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });
   if (!done) return res.status(409).json({ error: 'not_exchangeable' });
 
   if (payment) await dbSafe(() => db.query(
@@ -429,6 +470,7 @@ app.get('/api/reviews', async (req, res) => {
   const { experienceId, limit } = req.query;
   const rows = await dbSafe(() => reviews.listReviews(db, { experienceId, limit }), null);
   if (rows == null) return res.status(503).json({ error: 'DB unavailable' });
+  if (rows.error) return res.status(400).json({ error: rows.error });
   res.json(rows);
 });
 
