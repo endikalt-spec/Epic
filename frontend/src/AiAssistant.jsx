@@ -6,7 +6,9 @@ import { askAssistant } from "./api";
 // recommends experiences from the catalog and can add them to the gift box.
 export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, rtl }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState(() => [{ role: "assistant", content: t("assistant_welcome") }]);
+  // The greeting is derived from t() at render time (see below) so it re-translates
+  // on a language switch; only the actual conversation is stored here.
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [recs, setRecs] = useState([]);
@@ -46,7 +48,8 @@ export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, r
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 start-6 z-40 inline-flex items-center gap-2 rounded-full bg-ink-900 text-white ps-4 pe-5 py-3.5 font-bold shadow-pop hover:-translate-y-0.5 transition-transform"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
+          className="fixed start-6 z-40 inline-flex items-center gap-2 rounded-full bg-ink-900 text-white ps-4 pe-5 py-3.5 font-bold shadow-pop hover:-translate-y-0.5 transition-transform"
         >
           <span className="grid place-items-center h-7 w-7 rounded-full bg-gradient-to-br from-coral-400 to-coral-600"><Sparkles size={16} /></span>
           {t("assistant_button")}
@@ -54,7 +57,7 @@ export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, r
       )}
 
       {open && (
-        <div className="fixed bottom-4 start-4 end-4 sm:end-auto z-50 w-auto sm:w-[380px] max-w-[calc(100vw-2rem)] bg-cream-50 rounded-3xl shadow-pop flex flex-col overflow-hidden animate-rise" style={{ height: "min(70vh, 560px)" }}>
+        <div className="fixed start-4 end-4 sm:end-auto z-50 w-auto sm:w-[380px] max-w-[calc(100vw-2rem)] bg-cream-50 rounded-3xl shadow-pop flex flex-col overflow-hidden animate-rise" style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)", height: "min(70vh, 560px)" }}>
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 bg-ink-900 text-white">
             <div className="flex items-center gap-2">
@@ -69,6 +72,10 @@ export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, r
 
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {/* Live-translated greeting bubble (not stored in state). */}
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-white text-ink-800 shadow-soft">{t("assistant_welcome")}</div>
+            </div>
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.role === "user" ? "bg-coral-500 text-white" : "bg-white text-ink-800 shadow-soft"}`}>
@@ -86,7 +93,7 @@ export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, r
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-ink-900 text-sm truncate">{loc(e, "title")}</div>
-                      <div className="font-display font-extrabold text-coral-600 text-sm">₪{Number(e.price).toLocaleString("en-US")}</div>
+                      <div className="font-display font-extrabold text-coral-600 text-sm">₪{Number(e.price).toLocaleString(lang === "ru" ? "ru-RU" : "he-IL")}</div>
                     </div>
                     <button
                       onClick={() => onAdd(e)}
@@ -108,7 +115,7 @@ export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, r
               </div>
             )}
 
-            {messages.length <= 1 && (
+            {messages.length === 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
                 {suggestions.map((s) => (
                   <button key={s} onClick={() => setInput(s)} className="rounded-full bg-white shadow-soft px-3 py-1.5 text-xs font-semibold text-ink-600 hover:text-coral-600">{s}</button>

@@ -14,7 +14,9 @@ import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
 import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
 import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
-const nis = (n) => `₪${Number(n).toLocaleString("en-US")}`;
+import i18n from "./i18n";
+const fmtLocale = () => (i18n.language === "ru" ? "ru-RU" : "he-IL");
+const nis = (n) => `₪${Number(n).toLocaleString(fmtLocale())}`;
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
 
@@ -119,6 +121,7 @@ export default function Vau() {
   const [legalDoc, setLegalDoc] = useState("terms");
   const [loyalty, setLoyalty] = useState(null);
   const [lastPayment, setLastPayment] = useState(null);
+  const [usingFallback, setUsingFallback] = useState(false);
 
   const refreshLoyalty = () => {
     if (!localStorage.getItem("vau_token")) { setLoyalty(null); return; }
@@ -139,14 +142,15 @@ export default function Vau() {
           axios.get(`${API_URL}/categories`, { timeout: 4000 }),
         ]);
         if (!alive) return;
-        const exps = Array.isArray(expRes.data) && expRes.data.length ? expRes.data : FALLBACK_EXPS;
-        const cats = Array.isArray(catRes.data) && catRes.data.length ? catRes.data : FALLBACK_CATS;
-        setExperiences(exps);
-        setCategories(cats);
+        const liveExps = Array.isArray(expRes.data) && expRes.data.length;
+        setExperiences(liveExps ? expRes.data : FALLBACK_EXPS);
+        setCategories(Array.isArray(catRes.data) && catRes.data.length ? catRes.data : FALLBACK_CATS);
+        setUsingFallback(!liveExps); // API reachable but empty → still not live inventory
       } catch {
         if (!alive) return;
         setExperiences(FALLBACK_EXPS);
         setCategories(FALLBACK_CATS);
+        setUsingFallback(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -186,12 +190,25 @@ export default function Vau() {
 
   const signOut = () => { localStorage.removeItem("vau_token"); setUser(null); setLoyalty(null); };
 
-  // Lock body scroll when an overlay is open
+  // Lock body scroll when any overlay is open (including the login modal).
   useEffect(() => {
-    const open = drawerOpen || modalExp || menuOpen;
+    const open = drawerOpen || modalExp || menuOpen || loginOpen;
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [drawerOpen, modalExp, menuOpen]);
+  }, [drawerOpen, modalExp, menuOpen, loginOpen]);
+
+  // Escape closes the topmost open overlay (keyboard dismissal).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (modalExp) setModalExp(null);
+      else if (drawerOpen) setDrawerOpen(false);
+      else if (loginOpen) setLoginOpen(false);
+      else if (menuOpen) setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modalExp, drawerOpen, loginOpen, menuOpen]);
 
   const catSlug = (e) => e.category ?? e.category_slug ?? null;
   const filtered = useMemo(() => {
@@ -237,8 +254,18 @@ export default function Vau() {
       setLastPayment(res.payment || null);
       clearGiftBox();
       refreshLoyalty();
-    } catch {
-      setCheckoutError(t("checkout_error"));
+    } catch (err) {
+      // Surface a specific reason where the server gives one (decline, terms,
+      // rate limit, persist-after-charge) instead of one generic message.
+      const status = err?.response?.status;
+      const reason = err?.response?.data?.error;
+      const ref = err?.response?.data?.paymentRef;
+      let msg = t("checkout_error");
+      if (reason === "terms_not_accepted") msg = t("checkout_error_terms");
+      else if (status === 402 || reason === "Payment not completed") msg = t("checkout_error_declined");
+      else if (status === 429) msg = t("checkout_error_ratelimit");
+      else if (reason === "voucher_persist_failed") msg = t("checkout_error_persist", { ref: ref || "" });
+      setCheckoutError(msg);
     } finally {
       setCheckoutLoading(false);
     }
@@ -268,6 +295,12 @@ export default function Vau() {
           goRedeem, goExchange, changeLang, menuOpen, setMenuOpen,
           user, onSignIn: () => setLoginOpen(true), onSignOut: signOut }}
       />
+
+      {usingFallback && !DEMO && (
+        <div className="bg-sun-400/20 border-b border-sun-400/40 text-ink-700 text-sm text-center px-4 py-2.5 mt-16">
+          {t("offline_banner")}
+        </div>
+      )}
 
       <Hero {...{ t, rtl, experiences }} />
 
@@ -317,7 +350,8 @@ export default function Vau() {
       {giftBox.length > 0 && !drawerOpen && (
         <button
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-6 end-6 z-40 lg:hidden flex items-center gap-2 rounded-full bg-coral-500 text-white px-5 py-4 font-bold glow-coral animate-pop"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
+          className="fixed end-6 z-40 lg:hidden flex items-center gap-2 rounded-full bg-coral-500 text-white px-5 py-4 font-bold glow-coral animate-pop"
         >
           <Gift size={20} />
           <span>{giftBox.length}</span>
@@ -676,7 +710,7 @@ function ExperienceCard({ exp, t, loc, openModal, add, added, boxFull }) {
       <button onClick={() => openModal(exp)} className="relative h-56 block text-start cursor-pointer">
         <SmartImg src={exp.img} alt={loc(exp, "title")} emoji={exp.emoji} tint={exp.tint} className="absolute inset-0" imgClass="group-hover:scale-105" />
         {exp.is_best_seller && (
-          <span className="absolute top-3 start-3"><Pill className="bg-coral-500 text-white shadow-lift"><Sparkles size={12} /> Bestseller</Pill></span>
+          <span className="absolute top-3 start-3"><Pill className="bg-coral-500 text-white shadow-lift"><Sparkles size={12} /> {t("bestseller_badge")}</Pill></span>
         )}
         {exp.old_price && (
           <span className="absolute top-3 end-3"><Pill className="bg-sun-400 text-ink-900">-{Math.round((1 - exp.price / exp.old_price) * 100)}%</Pill></span>
@@ -784,6 +818,9 @@ function LoyaltySection({ t, loyalty, user, onSignIn }) {
                   <div className="text-center text-white/80 text-sm">{t("club_remaining", { n: loyalty.remaining })}</div>
                 )}
               </>
+            ) : user ? (
+              // Signed in but loyalty couldn't load — don't prompt them to sign in again.
+              <div className="text-center py-6 text-white/70 text-sm">{t("club_unavailable")}</div>
             ) : (
               <div className="text-center py-4">
                 <div className="text-5xl mb-3">🎁</div>
@@ -881,7 +918,7 @@ function ReviewsBlock({ t, experienceId = null, user, compact = false }) {
               <blockquote className="text-ink-700 leading-relaxed flex-1">"{r.body}"</blockquote>
               <figcaption className="mt-6 flex items-center gap-3">
                 <div className="grid place-items-center h-11 w-11 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{(r.author_name || "?").charAt(0)}</div>
-                <div><div className="font-bold text-ink-900">{r.author_name}</div><div className="text-sm text-ink-400">{new Date(r.created_at).toLocaleDateString()}</div></div>
+                <div><div className="font-bold text-ink-900">{r.author_name}</div><div className="text-sm text-ink-400">{new Date(r.created_at).toLocaleDateString(fmtLocale())}</div></div>
               </figcaption>
             </figure>
           ))}
@@ -1094,7 +1131,13 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
       setCopied(true); setTimeout(() => setCopied(false), 1800);
     }).catch(() => {});
   };
-  const closeAll = () => { setOrderCode(null); setVoucher(null); setLastPayment?.(null); close(); };
+  // Reset the whole drawer form so a subsequent order never inherits the
+  // previous recipient, voucher type, card, or consent ticks.
+  const resetForm = () => {
+    setBuyerEmailInput(""); setVoucherType("bearer"); setRecipientName(""); setRecipientEmail("");
+    setMethod("card"); setCardLast4(""); setAcceptTerms(false); setMarketingOptIn(false);
+  };
+  const closeAll = () => { setOrderCode(null); setVoucher(null); setLastPayment?.(null); resetForm(); close(); };
 
   const emailOk = /.+@.+\..+/.test(buyerEmail);
   const recipientOk = voucherType !== "personalized" || /.+@.+\..+/.test(recipientEmail);
@@ -1291,7 +1334,7 @@ function ExperienceModal({ exp, close, t, loc, add, added, boxFull, user }) {
         <div className="relative h-64 shrink-0">
           <SmartImg src={exp.img} alt={loc(exp, "title")} emoji={exp.emoji} tint={exp.tint} className="absolute inset-0" />
           <button onClick={close} className="absolute top-4 end-4 grid place-items-center h-10 w-10 rounded-full bg-white/90 backdrop-blur text-ink-900 hover:text-coral-600 shadow-soft"><X size={20} /></button>
-          {exp.is_best_seller && <span className="absolute top-4 start-4"><Pill className="bg-coral-500 text-white"><Sparkles size={12} /> Bestseller</Pill></span>}
+          {exp.is_best_seller && <span className="absolute top-4 start-4"><Pill className="bg-coral-500 text-white"><Sparkles size={12} /> {t("bestseller_badge")}</Pill></span>}
         </div>
         <div className="p-7 overflow-y-auto">
           <div className="flex items-center gap-3 mb-3">
