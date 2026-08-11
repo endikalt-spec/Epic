@@ -77,11 +77,30 @@ function appleAuthUrl(state = crypto.randomBytes(8).toString('hex')) {
   u.searchParams.set('state', state);
   return u.toString();
 }
-// Apple returns an id_token (JWT). For production, verify its signature against
-// Apple's public keys (https://appleid.apple.com/auth/keys); here we decode the
-// claims to extract the identity.
-function decodeAppleIdToken(idToken) {
-  const payload = jwt.decode(idToken);
+// Apple returns an id_token (JWT). We MUST verify its signature against Apple's
+// public keys and check issuer/audience/expiry — decoding alone would let anyone
+// submit a self-signed token for any identity. Keys are cached for an hour.
+let appleKeysCache = { keys: null, at: 0 };
+async function appleJwks() {
+  if (appleKeysCache.keys && Date.now() - appleKeysCache.at < 3600000) return appleKeysCache.keys;
+  const res = await fetch('https://appleid.apple.com/auth/keys');
+  if (!res.ok) throw new Error('Failed to fetch Apple JWKS');
+  const { keys } = await res.json();
+  appleKeysCache = { keys, at: Date.now() };
+  return keys;
+}
+
+async function verifyAppleIdToken(idToken) {
+  const header = jwt.decode(idToken, { complete: true })?.header;
+  if (!header?.kid) throw new Error('Invalid Apple id_token');
+  const jwk = (await appleJwks()).find((k) => k.kid === header.kid);
+  if (!jwk) throw new Error('Apple signing key not found');
+  const publicKey = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+  const payload = jwt.verify(idToken, publicKey, {
+    algorithms: ['RS256'],
+    issuer: 'https://appleid.apple.com',
+    audience: config.apple.clientId,
+  });
   if (!payload?.sub) throw new Error('Invalid Apple id_token');
   return { id: 'apple:' + payload.sub, email: payload.email, name: payload.email?.split('@')[0], provider: 'apple' };
 }
@@ -100,5 +119,5 @@ function demoLogin({ provider = 'google', name, email } = {}) {
 
 module.exports = {
   issueToken, verifyToken, authOptional, providerStatus,
-  googleAuthUrl, exchangeGoogleCode, appleAuthUrl, decodeAppleIdToken, demoLogin,
+  googleAuthUrl, exchangeGoogleCode, appleAuthUrl, verifyAppleIdToken, demoLogin,
 };

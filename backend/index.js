@@ -17,9 +17,12 @@ const reviews = require('./reviews');
 const app = express();
 const port = config.port;
 
-app.use(cors());
+// Restrict CORS to the configured origins in production; allow all when none
+// are set (local dev). Auth is Bearer-token, so this limits which browser
+// origins can call the API with a stolen token.
+app.use(cors(config.corsOrigins.length ? { origin: config.corsOrigins } : {}));
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(morgan('dev'));
+app.use(morgan(config.env === 'production' ? 'combined' : 'dev'));
 
 // Stripe webhooks need the raw body for signature verification — mount before json().
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -38,7 +41,18 @@ app.use(auth.authOptional);
 const clientIp = (req) => (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
 const dbSafe = async (fn, fallback) => { try { return await fn(); } catch (e) { console.error('[db]', e.message); return fallback; } };
 
+// Liveness: process is up. Readiness: also verifies DB connectivity so a
+// load balancer / uptime check doesn't route traffic to an instance whose DB
+// is down.
 app.get('/health', (_req, res) => res.send('OK'));
+app.get('/health/ready', async (_req, res) => {
+  try {
+    await db.query('SELECT 1');
+    res.json({ status: 'ready' });
+  } catch {
+    res.status(503).json({ status: 'db_unavailable' });
+  }
+});
 
 // ─────────────────────────── CATALOG ───────────────────────────
 app.get('/api/categories', async (_req, res) => {
@@ -102,8 +116,11 @@ app.get('/api/auth/google/callback', async (req, res) => {
 });
 
 app.post('/api/auth/apple/callback', express.urlencoded({ extended: true }), async (req, res) => {
+  // Only accept Apple callbacks when Apple is actually configured — otherwise the
+  // route is a forged-token entry point. When unconfigured it stays disabled.
+  if (config.isDemo.apple) return res.status(404).json({ error: 'Apple sign-in not enabled' });
   try {
-    const user = auth.decodeAppleIdToken(req.body.id_token);
+    const user = await auth.verifyAppleIdToken(req.body.id_token);
     await dbSafe(() => db.query(
       'INSERT INTO users (id,email,name,provider) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING',
       [user.id, user.email, user.name, user.provider]));
@@ -116,6 +133,7 @@ app.post('/api/auth/apple/callback', express.urlencoded({ extended: true }), asy
 
 // Demo login for local development (no provider keys required).
 app.post('/api/auth/demo', (req, res) => {
+  if (fraud.tooManyAttempts(`demo-login:${clientIp(req)}`, { max: 20 })) return res.status(429).json({ error: 'Too many attempts. Try later.' });
   const { provider, name, email } = req.body || {};
   const { user, token } = auth.demoLogin({ provider, name, email });
   dbSafe(() => db.query(
@@ -141,11 +159,17 @@ app.get('/api/payments/config', (_req, res) => {
 app.post('/api/checkout', async (req, res) => {
   const {
     experienceIds, method = 'card', recipient = null, buyerEmail, buyerName,
-    voucherType = 'bearer', cardLast4, amount: amountHint, locale,
+    voucherType = 'bearer', cardLast4, locale,
     acceptTerms, marketingOptIn = false,
   } = req.body || {};
+  if (fraud.tooManyAttempts(`checkout:${clientIp(req)}`, { max: 20 })) return res.status(429).json({ error: 'Too many attempts. Try later.' });
   if (!Array.isArray(experienceIds) || experienceIds.length === 0 || experienceIds.length > 5) {
     return res.status(400).json({ error: 'Invalid experience selection (1-5 required)' });
+  }
+  // Normalize to distinct positive integers — reject anything that isn't a valid id.
+  const ids = [...new Set(experienceIds.map((n) => Number(n)))];
+  if (ids.some((n) => !Number.isInteger(n) || n <= 0)) {
+    return res.status(400).json({ error: 'Invalid experience id' });
   }
   if (!SUPPORTED_METHODS.includes(method)) return res.status(400).json({ error: 'Unsupported payment method' });
   if (voucherType === 'personalized' && !recipient?.email) {
@@ -158,17 +182,19 @@ app.post('/api/checkout', async (req, res) => {
   if (acceptTerms !== true) return res.status(400).json({ error: 'terms_not_accepted' });
 
   try {
-    // Fetch catalog rows once: used for the amount, the email title and the
-    // order line-item snapshot stored on the CRM order record.
+    // Price the order ONLY from the catalog in the DB — the client never supplies
+    // an amount. Every requested id must resolve to a real experience, otherwise
+    // we refuse (a caller can't invent ids to mint a cheap/bogus voucher).
     const rows = await dbSafe(async () => {
-      const r = await db.query('SELECT id, title_he, price FROM experiences WHERE id = ANY($1)', [experienceIds]);
+      const r = await db.query('SELECT id, title_he, price FROM experiences WHERE id = ANY($1)', [ids]);
       return r.rows;
     }, null);
-    let amount = rows ? rows.reduce((s, r) => s + Number(r.price), 0) : 0;
-    if (!amount) amount = Number(amountHint) || 0;
+    if (rows == null) return res.status(503).json({ error: 'DB unavailable' });
+    if (rows.length !== ids.length) return res.status(400).json({ error: 'Unknown experience in selection' });
+    const amount = rows.reduce((s, r) => s + Number(r.price), 0);
     if (amount <= 0) return res.status(400).json({ error: 'Could not determine order amount' });
-    const items = (rows || []).map((r) => ({ id: r.id, title: r.title_he, price: Number(r.price) }));
-    const title = rows?.[0]?.title_he || null;
+    const items = rows.map((r) => ({ id: r.id, title: r.title_he, price: Number(r.price) }));
+    const title = rows[0]?.title_he || null;
 
     // Loyalty ("VAU Club"): every 4th gift within a rolling year is 50% off.
     // Computed server-side from the order history — never trusted from the client.
@@ -208,7 +234,7 @@ app.post('/api/checkout', async (req, res) => {
          VALUES ($1,$2,$3,$4,'active',$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [voucher.code, voucher.token, voucher.signature, voucher.type, voucher.recipientRef,
          recipient?.email || null, recipient?.name || null, deliverTo, req.user?.sub || null,
-         paymentDbId, experienceIds, grossAmount, voucher.expiresAt]);
+         paymentDbId, ids, grossAmount, voucher.expiresAt]);
     });
 
     // 3b) Record the customer, consent (terms + marketing) and the order — the
@@ -348,6 +374,8 @@ app.post('/api/vouchers/exchange', async (req, res) => {
 
 // ─────────────────────────── AI GIFT ASSISTANT ───────────────────────────
 app.post('/api/assistant', async (req, res) => {
+  // Rate-limit: the assistant can call the billed Anthropic API — cap per IP.
+  if (fraud.tooManyAttempts(`assistant:${clientIp(req)}`, { max: 30 })) return res.status(429).json({ error: 'Too many requests. Try later.' });
   const { messages = [], recipient = null, catalog = [], lang = 'he' } = req.body || {};
   try {
     const out = await assistant.recommend({ messages, recipient, catalog, lang });
@@ -419,10 +447,16 @@ app.post('/api/reviews', async (req, res) => {
 
 // ─────────────────────────── ADMIN (CRM back-office) ───────────────────────────
 // Protected by a shared admin token. Disabled entirely when ADMIN_TOKEN is unset.
+const crypto = require('crypto');
+function timingSafeEqual(a, b) {
+  const ab = Buffer.from(String(a)); const bb = Buffer.from(String(b));
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
 function requireAdmin(req, res, next) {
   if (!config.adminToken) return res.status(403).json({ error: 'admin_disabled' });
   const t = req.headers['x-admin-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (t !== config.adminToken) return res.status(401).json({ error: 'unauthorized' });
+  if (!timingSafeEqual(t, config.adminToken)) return res.status(401).json({ error: 'unauthorized' });
   next();
 }
 
@@ -456,6 +490,20 @@ app.get('/api/admin/orders', requireAdmin, async (req, res) => {
   res.json(data);
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`VAU API on :${port}  (payments=${getGateway().name}, assistant=${config.isDemo.assistant ? 'rules' : 'claude'}, email=${config.email.transport}, crm=${crm.getCrm().name})`);
 });
+
+// Graceful shutdown: stop accepting connections, drain in-flight requests, then
+// close the DB pool so redeploys/SIGTERM don't drop live requests or leak conns.
+function shutdown(signal) {
+  console.log(`[shutdown] ${signal} received, closing server...`);
+  server.close(async () => {
+    try { await db.close?.(); } catch { /* ignore */ }
+    console.log('[shutdown] done');
+    process.exit(0);
+  });
+  // Hard-exit if draining takes too long.
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+['SIGTERM', 'SIGINT'].forEach((s) => process.on(s, () => shutdown(s)));

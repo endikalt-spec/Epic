@@ -11,6 +11,9 @@ const config = {
   publicUrl: process.env.PUBLIC_URL || 'http://localhost:5173',
   apiUrl: process.env.API_URL || 'http://localhost:3001',
 
+  // Allowed CORS origins (comma-separated). Empty = allow all (dev only).
+  corsOrigins: (process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean),
+
   // Signing secrets. In production these MUST be set to strong random values.
   jwtSecret: process.env.JWT_SECRET || 'dev-insecure-jwt-secret-change-me',
   voucherSecret: process.env.VOUCHER_SECRET || 'dev-insecure-voucher-hmac-secret-change-me',
@@ -110,5 +113,21 @@ config.isDemo = {
     (config.crm.provider === 'hubspot' && !config.crm.hubspot.token) ||
     (config.crm.provider === 'activetrail' && !config.crm.activetrail.token),
 };
+
+// ── Production safety guard ──
+// Refuse to boot in production with missing or default signing secrets — running
+// with the known dev defaults would let anyone forge login JWTs and voucher
+// HMAC signatures. Fail loud and early instead of silently shipping insecure.
+const DEFAULT_JWT = 'dev-insecure-jwt-secret-change-me';
+const DEFAULT_VOUCHER = 'dev-insecure-voucher-hmac-secret-change-me';
+if (config.env === 'production') {
+  const problems = [];
+  if (!process.env.JWT_SECRET || config.jwtSecret === DEFAULT_JWT) problems.push('JWT_SECRET is unset or the insecure default');
+  if (!process.env.VOUCHER_SECRET || config.voucherSecret === DEFAULT_VOUCHER) problems.push('VOUCHER_SECRET is unset or the insecure default');
+  if (problems.length) {
+    console.error('FATAL: refusing to start in production —\n  - ' + problems.join('\n  - '));
+    process.exit(1);
+  }
+}
 
 module.exports = config;
