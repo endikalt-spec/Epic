@@ -39,3 +39,16 @@ export const postReview = (payload) => DEMO ? demo.postReview(payload) : api.pos
 
 // ── Assistant ──
 export const askAssistant = (payload) => DEMO ? demo.askAssistant(payload) : api.post("/assistant", payload).then((r) => r.data);
+
+// ── Admin ──
+const adminAuth = () => { const t = localStorage.getItem("vau_admin_token"); return t ? { headers: { Authorization: `Bearer ${t}` } } : {}; };
+export const adminLogin = (payload) => DEMO ? demo.adminLogin(payload) : api.post("/admin/auth/login", payload).then((r) => r.data);
+export const adminMe = () => DEMO ? demo.adminMe() : api.get("/admin/auth/me", adminAuth()).then((r) => r.data);
+export const admin2faSetup = () => DEMO ? demo.admin2faSetup() : api.post("/admin/auth/2fa/setup", {}, adminAuth()).then((r) => r.data);
+export const admin2faEnable = (totp) => DEMO ? demo.admin2faEnable(totp) : api.post("/admin/auth/2fa/enable", { totp }, adminAuth()).then((r) => r.data);
+export const adminRecoverStart = (email) => DEMO ? demo.adminRecoverStart(email) : api.post("/admin/auth/recover/start", { email }).then((r) => r.data);
+export const adminRecoverVerify = (payload) => DEMO ? demo.adminRecoverVerify(payload) : api.post("/admin/auth/recover/verify", payload).then((r) => r.data);
+export const adminGetBusinesses = () => DEMO ? demo.adminGetBusinesses() : api.get("/admin/businesses", adminAuth()).then((r) => r.data);
+export const adminCreateBusiness = (b) => DEMO ? demo.adminCreateBusiness(b) : api.post("/admin/businesses", b, adminAuth()).then((r) => r.data);
+export const adminUpdateBusiness = (id, b) => DEMO ? demo.adminUpdateBusiness(id, b) : api.put(`/admin/businesses/${id}`, b, adminAuth()).then((r) => r.data);
+export const adminGetStats = () => DEMO ? demo.adminGetStats() : api.get("/admin/stats", adminAuth()).then((r) => r.data);

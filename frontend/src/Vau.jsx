@@ -12,6 +12,7 @@ import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
+import AdminPanel from "./AdminPanel";
 import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
 import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
 import i18n from "./i18n";
@@ -115,7 +116,7 @@ export default function Vau() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalExp, setModalExp] = useState(null);
-  const [view, setView] = useState("home"); // home | redeem
+  const [view, setView] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("admin") ? "admin" : "home")); // home | redeem | exchange | legal | admin
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [orderCode, setOrderCode] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
@@ -278,9 +279,13 @@ export default function Vau() {
   const goRedeem = () => { setView("redeem"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
   const goExchange = () => { setView("exchange"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
   const goLegal = (docType) => { setLegalDoc(docType); setView("legal"); setMenuOpen(false); window.scrollTo(0, 0); };
+  const goAdmin = () => { setView("admin"); setMenuOpen(false); window.scrollTo(0, 0); };
   const goHome = () => { setView("home"); window.scrollTo(0, 0); };
   const changeLang = (l) => i18n.changeLanguage(l);
 
+  if (view === "admin") {
+    return <AdminPanel lang={lang} goHome={goHome} />;
+  }
   if (view === "redeem") {
     return <RedeemView goHome={goHome} loc={loc} t={t} rtl={rtl} />;
   }
@@ -331,7 +336,7 @@ export default function Vau() {
 
       <Newsletter t={t} />
 
-      <Footer t={t} lang={lang} goRedeem={goRedeem} goLegal={goLegal} />
+      <Footer t={t} lang={lang} goRedeem={goRedeem} goLegal={goLegal} goAdmin={goAdmin} />
 
       {/* Gift box drawer */}
       <GiftDrawer
@@ -1065,7 +1070,7 @@ function Newsletter({ t }) {
 
 /* ─────────────────────────── FOOTER ─────────────────────────── */
 
-function Footer({ t, lang, goRedeem, goLegal }) {
+function Footer({ t, lang, goRedeem, goLegal, goAdmin }) {
   const explore = ["nav_experiences", "nav_how", "nav_reviews", "nav_business"];
   const support = [
     { key: "footer_faq", href: "#how" },
@@ -1110,7 +1115,7 @@ function Footer({ t, lang, goRedeem, goLegal }) {
       </div>
       <div className="border-t border-white/10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-cream-300/60">
-          <span>© {new Date().getFullYear()} VAU · {t("footer_rights")}</span>
+          <span>© {new Date().getFullYear()} VAU · {t("footer_rights")} · <button onClick={goAdmin} className="hover:text-coral-400">{lang === "he" ? "ניהול" : "Админ"}</button></span>
           <span>{lang === "he" ? "נבנה באהבה בישראל 🇮🇱" : "Сделано с любовью в Израиле 🇮🇱"}</span>
         </div>
       </div>

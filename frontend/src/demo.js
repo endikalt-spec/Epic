@@ -4,7 +4,7 @@
 // login, checkout, loyalty, reviews, assistant — with no server, so the build
 // can run as a standalone, self-contained demo page. Production builds never
 // import this path.
-import { EXPERIENCES } from "./data";
+import { EXPERIENCES, BUSINESSES } from "./data";
 
 const LS = {
   user: "vau_demo_user",
@@ -126,6 +126,91 @@ export default {
     };
     writeJSON(LS.reviews, [review, ...readJSON(LS.reviews, [])]);
     return review;
+  },
+
+  // ── ADMIN (mocked so the whole security flow is clickable in the demo) ──
+  // Demo credentials are shown on the login screen. Brute-force lock after 3
+  // wrong tries (60s in the demo). Demo 2FA / recovery codes are surfaced on
+  // screen since there's no real authenticator app or SMS here.
+  async _adminState() {
+    const st = readJSON("vau_demo_admin", null);
+    if (st) return st;
+    const seed = { email: "admin@vau.co.il", password: "vau-admin", phone: "+972500000000", failed: 0, lockedUntil: 0, twoFactor: false, recovery: null };
+    writeJSON("vau_demo_admin", seed);
+    return seed;
+  },
+  async adminLogin({ email, password, totp } = {}) {
+    await delay(400);
+    const st = await this._adminState();
+    const now = Date.now();
+    if (st.lockedUntil && st.lockedUntil > now) return Promise.reject({ response: { status: 423, data: { error: "locked", until: new Date(st.lockedUntil).toISOString() } } });
+    if (String(email).toLowerCase() !== st.email || password !== st.password) {
+      st.failed += 1;
+      if (st.failed >= 3) { st.lockedUntil = now + 60000; st.failed = 0; writeJSON("vau_demo_admin", st); return Promise.reject({ response: { status: 423, data: { error: "locked", until: new Date(st.lockedUntil).toISOString(), message: "Слишком много попыток. Блокировка на 60 сек (демо)." } } }); }
+      writeJSON("vau_demo_admin", st);
+      return Promise.reject({ response: { status: 401, data: { error: "invalid_credentials", attemptsLeft: 3 - st.failed } } });
+    }
+    if (st.twoFactor) {
+      if (!totp) return { needs2fa: true };
+      if (totp !== "123456") return Promise.reject({ response: { status: 401, data: { error: "invalid_2fa", attemptsLeft: 3 } } });
+    }
+    st.failed = 0; st.lockedUntil = 0; writeJSON("vau_demo_admin", st);
+    localStorage.setItem("vau_admin_token", "demo-admin-token");
+    return { token: "demo-admin-token", admin: { email: st.email, role: "superadmin", twoFactorEnabled: st.twoFactor } };
+  },
+  async adminMe() {
+    await delay(120);
+    if (localStorage.getItem("vau_admin_token") !== "demo-admin-token") return Promise.reject({ response: { status: 401 } });
+    const st = await this._adminState();
+    return { admin: { email: st.email, role: "superadmin", phone: st.phone, twoFactorEnabled: st.twoFactor } };
+  },
+  async admin2faSetup() {
+    await delay(200);
+    return { secret: "DEMO-VAU-2FA-SECRET", uri: "otpauth://totp/VAU:admin (demo)", qr: null, demoCode: "123456" };
+  },
+  async admin2faEnable(totp) {
+    await delay(200);
+    if (totp !== "123456") return Promise.reject({ response: { status: 400, data: { error: "invalid_2fa" } } });
+    const st = await this._adminState(); st.twoFactor = true; writeJSON("vau_demo_admin", st);
+    return { ok: true };
+  },
+  async adminRecoverStart(email) {
+    await delay(300);
+    const st = await this._adminState();
+    if (String(email).toLowerCase() !== st.email) return { ok: true, message: "Если аккаунт существует, код отправлен." };
+    st.recovery = String(Math.floor(100000 + Math.random() * 900000)); writeJSON("vau_demo_admin", st);
+    return { ok: true, demoCode: st.recovery, message: "Демо: код показан ниже (в проде придёт по SMS)." };
+  },
+  async adminRecoverVerify({ email, code, newPassword } = {}) {
+    await delay(300);
+    const st = await this._adminState();
+    if (String(email).toLowerCase() !== st.email || !st.recovery || code !== st.recovery) return Promise.reject({ response: { status: 400, data: { error: "invalid_code" } } });
+    if (!newPassword || newPassword.length < 8) return Promise.reject({ response: { status: 400, data: { error: "weak_password" } } });
+    st.password = newPassword; st.recovery = null; st.failed = 0; st.lockedUntil = 0; writeJSON("vau_demo_admin", st);
+    return { ok: true };
+  },
+  async _bizList() {
+    let list = readJSON("vau_demo_biz", null);
+    if (!list) {
+      list = Object.entries(BUSINESSES).map(([slug, b], i) => ({ id: i + 1, slug, ...b, img: null, video_url: null }));
+      writeJSON("vau_demo_biz", list);
+    }
+    return list;
+  },
+  async adminGetBusinesses() { await delay(200); return this._bizList(); },
+  async adminCreateBusiness(b) {
+    await delay(250); const list = await this._bizList();
+    const row = { id: Math.max(0, ...list.map((x) => x.id)) + 1, ...b };
+    writeJSON("vau_demo_biz", [...list, row]); return row;
+  },
+  async adminUpdateBusiness(id, patch) {
+    await delay(250); const list = await this._bizList();
+    const next = list.map((x) => (x.id === Number(id) ? { ...x, ...patch } : x));
+    writeJSON("vau_demo_biz", next); return next.find((x) => x.id === Number(id));
+  },
+  async adminGetStats() {
+    await delay(150);
+    return { customers: 128, marketingOptIns: 74, orders: 203, revenue: 187400, currency: "ILS" };
   },
 
   // ── AI assistant (deterministic keyword recommender for the demo) ──
