@@ -44,12 +44,35 @@ app.use(express.json());
 app.use(auth.authOptional);
 
 const clientIp = (req) => req.ip || req.socket.remoteAddress || '';
+const getCookie = (req, name) => {
+  const raw = req.headers.cookie || '';
+  const m = raw.split(';').map((c) => c.trim()).find((c) => c.startsWith(name + '='));
+  return m ? decodeURIComponent(m.slice(name.length + 1)) : null;
+};
+const OAUTH_STATE_COOKIE = 'vau_oauth_state';
+const setStateCookie = (res, state) => res.cookie(OAUTH_STATE_COOKIE, state, {
+  httpOnly: true, sameSite: 'lax', secure: config.env === 'production', maxAge: 600000, path: '/',
+});
 const dbSafe = async (fn, fallback) => { try { return await fn(); } catch (e) { console.error('[db]', e.message); return fallback; } };
 // Distinct sentinel for a DB error, so callers can tell "the query threw"
 // (→ 503) apart from "the query ran and found nothing" (→ 404/409). Never
 // confuse the two: reusing `undefined` for both masks not-found as unavailable.
 const DB_ERROR = Symbol('db_error');
 const dbTry = async (fn) => { try { return await fn(); } catch (e) { console.error('[db]', e.message); return DB_ERROR; } };
+
+// Per-user serialization for checkout, so two concurrent purchases by the same
+// customer can't both read "next gift is the reward" and both get the 50% off
+// (check-then-act race). In-process only — a multi-instance deployment needs a
+// distributed lock (same caveat as the in-memory rate limiter).
+const userLocks = new Map();
+function withUserLock(key, fn) {
+  const prev = userLocks.get(key) || Promise.resolve();
+  const next = prev.then(fn, fn);           // run fn after the previous holder settles
+  const tail = next.catch(() => {});         // tail never rejects, so the chain continues
+  userLocks.set(key, tail);
+  tail.then(() => { if (userLocks.get(key) === tail) userLocks.delete(key); });
+  return next;
+}
 
 // Liveness: process is up. Readiness: also verifies DB connectivity so a
 // load balancer / uptime check doesn't route traffic to an instance whose DB
@@ -106,13 +129,20 @@ app.get('/api/auth/providers', (_req, res) => res.json(auth.providerStatus()));
 
 app.get('/api/auth/:provider/start', (req, res) => {
   const { provider } = req.params;
-  if (provider === 'google' && !config.isDemo.google) return res.redirect(auth.googleAuthUrl());
-  if (provider === 'apple' && !config.isDemo.apple) return res.redirect(auth.appleAuthUrl());
+  // Generate an anti-CSRF state, remember it in an httpOnly cookie, and require
+  // the callback to echo it — so a callback can't be replayed in a victim's
+  // browser to log them into the attacker's account (login CSRF).
+  const state = crypto.randomBytes(16).toString('hex');
+  if (provider === 'google' && !config.isDemo.google) { setStateCookie(res, state); return res.redirect(auth.googleAuthUrl(state)); }
+  if (provider === 'apple' && !config.isDemo.apple) { setStateCookie(res, state); return res.redirect(auth.appleAuthUrl(state)); }
   // Demo: no real provider configured.
   res.status(200).json({ demo: true, message: `${provider} is in demo mode; use POST /api/auth/demo` });
 });
 
 app.get('/api/auth/google/callback', async (req, res) => {
+  const expected = getCookie(req, OAUTH_STATE_COOKIE);
+  res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
+  if (!expected || req.query.state !== expected) return res.status(400).json({ error: 'invalid_state' });
   try {
     const user = await auth.exchangeGoogleCode(req.query.code);
     await dbSafe(() => db.query(
@@ -129,6 +159,9 @@ app.post('/api/auth/apple/callback', express.urlencoded({ extended: true }), asy
   // Only accept Apple callbacks when Apple is actually configured — otherwise the
   // route is a forged-token entry point. When unconfigured it stays disabled.
   if (config.isDemo.apple) return res.status(404).json({ error: 'Apple sign-in not enabled' });
+  const expected = getCookie(req, OAUTH_STATE_COOKIE);
+  res.clearCookie(OAUTH_STATE_COOKIE, { path: '/' });
+  if (!expected || req.body.state !== expected) return res.status(400).json({ error: 'invalid_state' });
   try {
     const user = await auth.verifyAppleIdToken(req.body.id_token);
     await dbSafe(() => db.query(
@@ -193,7 +226,9 @@ app.post('/api/checkout', async (req, res) => {
   // with a full audit trail below). This is both a business and legal gate.
   if (acceptTerms !== true) return res.status(400).json({ error: 'terms_not_accepted' });
 
-  try {
+  // Serialize per-user so the loyalty reward can't be double-applied by two
+  // concurrent checkouts (see withUserLock). Guests aren't loyalty-eligible.
+  const run = async () => {
     // Price the order ONLY from the catalog in the DB — the client never supplies
     // an amount. Every requested id must resolve to a real experience, otherwise
     // we refuse (a caller can't invent ids to mint a cheap/bogus voucher).
@@ -296,9 +331,14 @@ app.post('/api/checkout', async (req, res) => {
       payment: { status: 'succeeded', method, amount: chargeAmount, gross: grossAmount, discount, loyaltyReward },
       email,
     });
+  };
+
+  try {
+    if (req.user?.sub) await withUserLock(`checkout:${req.user.sub}`, run);
+    else await run();
   } catch (err) {
     console.error('[checkout]', err);
-    res.status(500).json({ error: 'Checkout failed' });
+    if (!res.headersSent) res.status(500).json({ error: 'Checkout failed' });
   }
 });
 
