@@ -17,6 +17,10 @@ import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher,
 import i18n from "./i18n";
 const fmtLocale = () => (i18n.language === "ru" ? "ru-RU" : "he-IL");
 const nis = (n) => `₪${Number(n).toLocaleString(fmtLocale())}`;
+// Wide thematic Unsplash photo for section backgrounds. IDs are reused from the
+// catalog so they're known-valid. Layered UNDER a color/overlay, so if the image
+// is blocked (e.g. the sandboxed demo) the section still looks right.
+const scene = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=70`;
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
 
@@ -485,6 +489,10 @@ function Hero({ t, experiences }) {
   const feat2 = pics[2] || pics[0];
   return (
     <section id="top" className="relative pt-28 sm:pt-32 pb-16 mesh-warm overflow-hidden">
+      {/* Faint photographic texture behind the warm mesh; a heavy cream wash keeps
+          the dark hero text readable and preserves the look if the image is blocked. */}
+      <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${scene("1600250395178-40fe752e5189")})` }} aria-hidden="true" />
+      <div className="absolute inset-0 bg-gradient-to-b from-cream-50/75 via-cream-50/65 to-cream-50/90" aria-hidden="true" />
       <div className="absolute -top-24 -start-24 w-96 h-96 rounded-full bg-coral-300/30 blur-3xl pointer-events-none" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center relative">
         <div className="animate-rise text-center lg:text-start">
@@ -756,14 +764,20 @@ function OccasionsBar({ t }) {
   ];
   return (
     <section className="mx-auto max-w-7xl px-4 sm:px-6 pb-4">
-      <div className="rounded-3xl bg-gradient-to-br from-coral-500 to-coral-700 p-8 sm:p-10 text-white">
-        <h2 className="font-display text-2xl sm:text-3xl font-extrabold mb-6">{t("occasions_title")}</h2>
-        <div className="flex flex-wrap gap-3">
-          {items.map(([k, e]) => (
-            <a key={k} href="#catalog" className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white hover:text-coral-600 backdrop-blur px-5 py-3 font-bold transition-all">
-              <span className="text-lg">{e}</span> {t(k)}
-            </a>
-          ))}
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-coral-500 to-coral-700 p-8 sm:p-10 text-white">
+        {/* Thematic photo layer under a coral wash (keeps white text legible; base
+            gradient shows if the image is unavailable). */}
+        <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${scene("1567899378494-47b22a2ae96a")})` }} aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-br from-coral-600/80 to-coral-800/85" aria-hidden="true" />
+        <div className="relative">
+          <h2 className="font-display text-2xl sm:text-3xl font-extrabold mb-6">{t("occasions_title")}</h2>
+          <div className="flex flex-wrap gap-3">
+            {items.map(([k, e]) => (
+              <a key={k} href="#catalog" className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white hover:text-coral-600 backdrop-blur px-5 py-3 font-bold transition-all">
+                <span className="text-lg">{e}</span> {t(k)}
+              </a>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -1024,6 +1038,9 @@ function Newsletter({ t }) {
   return (
     <section className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
       <div className="rounded-[2.5rem] bg-sun-400 p-8 sm:p-14 text-center overflow-hidden relative">
+        {/* Warm photo texture kept subtle so the dark copy stays readable. */}
+        <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${scene("1553284965-83fd3e82fa5a")})` }} aria-hidden="true" />
+        <div className="absolute inset-0 bg-sun-400/70" aria-hidden="true" />
         <div className="absolute -top-10 -end-10 w-48 h-48 rounded-full bg-white/20 blur-2xl" />
         <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-ink-900 mb-3 relative">{t("newsletter_title")}</h2>
         <p className="text-ink-800 text-lg mb-7 relative max-w-xl mx-auto">{t("newsletter_text")}</p>
