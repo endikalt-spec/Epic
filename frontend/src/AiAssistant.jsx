@@ -67,7 +67,7 @@ export default function AiAssistant({ experiences, lang, loc, onAdd, inBox, t, r
                 <div className="text-[11px] text-cream-300">{t("assistant_subtitle")}</div>
               </div>
             </div>
-            <button onClick={() => setOpen(false)} className="grid place-items-center h-8 w-8 rounded-full bg-white/10 hover:bg-white/20"><X size={16} /></button>
+            <button onClick={() => setOpen(false)} aria-label="Close" className="grid place-items-center h-10 w-10 rounded-full bg-white/10 hover:bg-white/20"><X size={18} /></button>
           </div>
 
           {/* Messages */}

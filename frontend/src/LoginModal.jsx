@@ -46,7 +46,7 @@ export default function LoginModal({ open, onClose, onLogin, t }) {
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm" />
       <div className="relative bg-cream-50 w-full max-w-sm rounded-3xl p-8 shadow-pop" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-5 end-5 grid place-items-center h-9 w-9 rounded-full bg-white shadow-soft"><X size={18} /></button>
+        <button onClick={onClose} aria-label="Close" className="absolute top-4 end-4 grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft"><X size={20} /></button>
         <div className="mb-3">
           <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
         </div>

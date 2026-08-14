@@ -424,32 +424,32 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
             ))}
           </div>
 
-          <button onClick={goRedeem} className="hidden sm:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+          <button onClick={goRedeem} className="hidden lg:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
             <Ticket size={16} /> {t("redeem_voucher")}
           </button>
 
           {user ? (
-            <div className="hidden sm:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2">
               <span className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold" title={user.name}>
                 {(user.name || "U").charAt(0).toUpperCase()}
               </span>
               <button onClick={onSignOut} className="text-xs font-bold text-ink-500 hover:text-coral-600">{t("sign_out")}</button>
             </div>
           ) : (
-            <button onClick={onSignIn} className="hidden sm:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+            <button onClick={onSignIn} className="hidden lg:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
               <LogIn size={16} /> {t("sign_in")}
             </button>
           )}
 
-          <button onClick={openDrawer} className="relative inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-4 py-2.5 text-sm font-bold hover:bg-ink-800 transition-colors">
+          <button onClick={openDrawer} className="relative inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-3.5 sm:px-4 py-2.5 text-sm font-bold hover:bg-ink-800 transition-colors">
             <Gift size={17} />
-            <span className="hidden sm:inline">{t("gift_box")}</span>
+            <span className="hidden lg:inline">{t("gift_box")}</span>
             {giftCount > 0 && (
               <span className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-coral-500 text-white text-[11px] font-extrabold">{giftCount}</span>
             )}
           </button>
 
-          <button onClick={() => setMenuOpen(true)} className="lg:hidden grid place-items-center h-10 w-10 rounded-full bg-white shadow-soft text-ink-900">
+          <button onClick={() => setMenuOpen(true)} aria-label={t("menu") || "Menu"} className="lg:hidden grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft text-ink-900">
             <Menu size={20} />
           </button>
         </div>
@@ -478,6 +478,21 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
               <button onClick={goRedeem} className="mt-2 flex items-center gap-2 px-3 py-3 text-lg font-bold text-coral-600">
                 <Ticket size={20} /> {t("redeem_voucher")}
               </button>
+              <div className="mt-2 pt-3 border-t border-cream-200">
+                {user ? (
+                  <div className="flex items-center justify-between px-3">
+                    <span className="flex items-center gap-2 font-bold text-ink-800">
+                      <span className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{(user.name || "U").charAt(0).toUpperCase()}</span>
+                      {user.name}
+                    </span>
+                    <button onClick={() => { setMenuOpen(false); onSignOut(); }} className="text-sm font-bold text-ink-500 hover:text-coral-600">{t("sign_out")}</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setMenuOpen(false); onSignIn(); }} className="w-full flex items-center gap-2 px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
+                    <LogIn size={20} /> {t("sign_in")}
+                  </button>
+                )}
+              </div>
             </nav>
           </div>
         </div>
@@ -528,6 +543,15 @@ function Hero({ t, experiences }) {
           <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 justify-center lg:justify-start text-sm font-semibold text-ink-600">
             {[["trust_secure", ShieldCheck], ["trust_validity", CalendarClock], ["trust_exchange", RefreshCw]].map(([k, Icon]) => (
               <span key={k} className="inline-flex items-center gap-1.5"><Icon size={16} className="text-teal-500" /> {t(k)}</span>
+            ))}
+          </div>
+
+          {/* Mobile visual (the desktop collage is hidden below md) */}
+          <div className="md:hidden mt-8 grid grid-cols-2 gap-3">
+            {[feat, feat2].map((e, i) => (
+              <div key={i} className={`rounded-2xl overflow-hidden shadow-lift ${i === 1 ? "mt-5" : ""}`} style={{ height: 168 }}>
+                <SmartImg src={e.img} alt="" emoji={e.emoji} tint={e.tint} className="w-full h-full" />
+              </div>
             ))}
           </div>
         </div>
@@ -670,14 +694,17 @@ function Catalog({ t, loc, loading, filtered, categories, activeCat, setActiveCa
         <SectionHead title={t("bestsellers_title")} subtitle={t("bestsellers_subtitle")} />
       </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-8 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+      {/* Filter chips — horizontally scrollable on mobile with an edge fade hint */}
+      <div className="relative mb-8">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
         <FilterChip active={activeCat === "all"} onClick={() => setActiveCat("all")}>{t("cat_all")}</FilterChip>
         {cats.map((c) => (
           <FilterChip key={c.id ?? c.slug} active={activeCat === c.slug} onClick={() => setActiveCat(c.slug)}>
             <span className="me-1">{c.emoji}</span>{loc(c, "name")}
           </FilterChip>
         ))}
+        </div>
+        <div className={`sm:hidden pointer-events-none absolute inset-y-0 end-0 w-10 ${rtl ? "bg-gradient-to-r" : "bg-gradient-to-l"} from-cream-50 to-transparent`} />
       </div>
 
       {loading ? (
@@ -861,7 +888,7 @@ function StarPick({ value, onChange }) {
   return (
     <div className="flex gap-1">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} className="p-0.5" aria-label={`${n}`}>
+        <button key={n} type="button" onClick={() => onChange(n)} className="p-1.5 -m-1" aria-label={`${n}`}>
           <Star size={22} className={n <= value ? "text-sun-500" : "text-cream-300"} fill={n <= value ? "currentColor" : "none"} />
         </button>
       ))}
@@ -1182,7 +1209,7 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-cream-200">
           <h3 className="font-display text-xl font-extrabold flex items-center gap-2"><Gift size={20} className="text-coral-500" /> {t("drawer_title")}</h3>
-          <button onClick={close} className="grid place-items-center h-9 w-9 rounded-full bg-white shadow-soft hover:text-coral-600"><X size={18} /></button>
+          <button onClick={close} aria-label="Close" className="grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft hover:text-coral-600"><X size={20} /></button>
         </div>
 
         {orderCode ? (
@@ -1221,8 +1248,9 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
         ) : (
           /* Items */
           <>
+            <div className="flex-1 overflow-y-auto">
             <div className="px-6 py-3 text-sm font-semibold text-ink-500 bg-cream-100">{t("box_hint")}</div>
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="px-6 py-4 space-y-4">
               {giftBox.map((e) => (
                 <div key={e.id} className="flex gap-3 items-center bg-white rounded-2xl p-3 shadow-soft">
                   <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0">
@@ -1243,7 +1271,7 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                 </button>
               )}
             </div>
-            <div className="border-t border-cream-200 px-6 py-5 space-y-4 bg-white max-h-[62vh] overflow-y-auto">
+            <div className="border-t border-cream-200 px-6 py-5 space-y-4 bg-white">
               {/* Buyer email */}
               <div>
                 <label className="text-xs font-bold text-ink-500 mb-1 block">{t("buyer_email")}</label>
@@ -1323,7 +1351,12 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
                 ) : null
               )}
 
-              <div className="flex items-center justify-between pt-1">
+            </div>
+            </div>
+
+            {/* Sticky checkout footer — always reachable; clears the iOS home bar. */}
+            <div className="shrink-0 border-t border-cream-200 bg-white px-6 pt-4 space-y-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
+              <div className="flex items-center justify-between">
                 <span className="font-bold text-ink-500">{t("total")}</span>
                 <span className="font-display text-2xl font-extrabold text-ink-900">
                   {discount > 0 && <span className="text-ink-300 line-through text-lg me-2 font-bold">{nis(total)}</span>}
