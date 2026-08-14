@@ -14,6 +14,7 @@ import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
 import AdminPanel from "./AdminPanel";
 import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
+import { useFocusTrap } from "./useFocusTrap";
 import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
 import i18n from "./i18n";
 const fmtLocale = () => (i18n.language === "ru" ? "ru-RU" : "he-IL");
@@ -22,6 +23,26 @@ const nis = (n) => `₪${Number(n).toLocaleString(fmtLocale())}`;
 // catalog so they're known-valid. Layered UNDER a color/overlay, so if the image
 // is blocked (e.g. the sandboxed demo) the section still looks right.
 const scene = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=70`;
+
+// ── Lightweight URL routing for internal views (no server rewrites needed) ──
+// Maps the current view to a ?v= query param so back/forward and bookmarks work,
+// while leaving #anchor scroll links and the ?code= redeem deep-link intact.
+function viewFromLocation() {
+  const p = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const v = p.get("v");
+  if (v === "redeem" || p.has("code")) return { view: "redeem" };
+  if (v === "exchange") return { view: "exchange" };
+  if (v === "terms") return { view: "legal", doc: "terms" };
+  if (v === "privacy") return { view: "legal", doc: "privacy" };
+  if (v === "admin" || p.has("admin")) return { view: "admin" };
+  return { view: "home" };
+}
+function urlForView(view, doc) {
+  const base = window.location.pathname;
+  if (view === "home") return base;
+  const key = view === "legal" ? (doc || "terms") : view;
+  return `${base}?v=${key}`;
+}
 
 /* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
 
@@ -116,14 +137,14 @@ export default function Vau() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalExp, setModalExp] = useState(null);
-  const [view, setView] = useState(() => (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("admin") ? "admin" : "home")); // home | redeem | exchange | legal | admin
+  const [view, setView] = useState(() => viewFromLocation().view); // home | redeem | exchange | legal | admin
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [orderCode, setOrderCode] = useState(null);
   const [checkoutError, setCheckoutError] = useState("");
   const [voucher, setVoucher] = useState(null);
   const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [legalDoc, setLegalDoc] = useState("terms");
+  const [legalDoc, setLegalDoc] = useState(() => viewFromLocation().doc || "terms");
   const [loyalty, setLoyalty] = useState(null);
   const [lastPayment, setLastPayment] = useState(null);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -276,12 +297,29 @@ export default function Vau() {
     }
   };
 
-  const goRedeem = () => { setView("redeem"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
-  const goExchange = () => { setView("exchange"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0); };
-  const goLegal = (docType) => { setLegalDoc(docType); setView("legal"); setMenuOpen(false); window.scrollTo(0, 0); };
-  const goAdmin = () => { setView("admin"); setMenuOpen(false); window.scrollTo(0, 0); };
-  const goHome = () => { setView("home"); window.scrollTo(0, 0); };
+  // Navigate between internal views and push a matching URL (back/forward work).
+  const navigate = (v, doc) => {
+    if (doc) setLegalDoc(doc);
+    setView(v); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0);
+    try { window.history.pushState({ v, doc }, "", urlForView(v, doc)); } catch { /* ignore */ }
+  };
+  const goRedeem = () => navigate("redeem");
+  const goExchange = () => navigate("exchange");
+  const goLegal = (docType) => navigate("legal", docType);
+  const goAdmin = () => navigate("admin");
+  const goHome = () => navigate("home");
   const changeLang = (l) => i18n.changeLanguage(l);
+
+  // Sync view with browser back/forward.
+  useEffect(() => {
+    const onPop = () => {
+      const { view: v, doc } = viewFromLocation();
+      if (doc) setLegalDoc(doc);
+      setView(v); window.scrollTo(0, 0);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   if (view === "admin") {
     return <AdminPanel lang={lang} goHome={goHome} />;
@@ -382,6 +420,7 @@ export default function Vau() {
 /* ─────────────────────────── HEADER ─────────────────────────── */
 
 function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange, changeLang, menuOpen, setMenuOpen, user, onSignIn, onSignOut }) {
+  const menuRef = useFocusTrap(menuOpen, () => setMenuOpen(false));
   const links = [
     { key: "nav_experiences", href: "#catalog" },
     { key: "nav_how", href: "#how" },
@@ -458,7 +497,7 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
       {/* Mobile menu */}
       {menuOpen && (
         <div className="lg:hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
-          <div className="absolute top-0 inset-x-0 bg-cream-50 rounded-b-3xl p-6 shadow-pop animate-rise" onClick={(e) => e.stopPropagation()}>
+          <div ref={menuRef} role="dialog" aria-modal="true" aria-label="Menu" tabIndex={-1} className="absolute top-0 inset-x-0 bg-cream-50 rounded-b-3xl p-6 shadow-pop animate-rise" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
               <button onClick={() => setMenuOpen(false)} className="grid place-items-center h-10 w-10 rounded-full bg-white shadow-soft"><X size={20} /></button>
@@ -1200,10 +1239,12 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
     ["google_pay", "Google Pay", Smartphone],
   ];
 
+  const trapRef = useFocusTrap(open, close);
   return (
     <div className={`fixed inset-0 z-[60] ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
       <div onClick={close} className={`absolute inset-0 bg-ink-900/50 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`} />
       <aside
+        ref={trapRef} role="dialog" aria-modal="true" aria-label={t("drawer_title")} tabIndex={-1}
         className={`absolute inset-y-0 end-0 w-full max-w-md bg-cream-50 shadow-pop flex flex-col transition-transform duration-300 ${open ? "translate-x-0" : (rtl ? "-translate-x-full" : "translate-x-full")}`}
       >
         {/* Header */}
@@ -1382,10 +1423,11 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
 
 function ExperienceModal({ exp, close, t, loc, add, added, boxFull, user }) {
   const biz = exp.business;
+  const trapRef = useFocusTrap(true, close);
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={close}>
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm animate-pop" />
-      <div className="relative bg-cream-50 w-full max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] overflow-hidden shadow-pop animate-rise max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={loc(exp, "title")} tabIndex={-1} className="relative bg-cream-50 w-full max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] overflow-hidden shadow-pop animate-rise max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="relative h-64 shrink-0">
           <SmartImg src={exp.img} alt={loc(exp, "title")} emoji={exp.emoji} tint={exp.tint} className="absolute inset-0" />
           <button onClick={close} className="absolute top-4 end-4 grid place-items-center h-10 w-10 rounded-full bg-white/90 backdrop-blur text-ink-900 hover:text-coral-600 shadow-soft"><X size={20} /></button>

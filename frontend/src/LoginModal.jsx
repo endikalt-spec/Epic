@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Loader2 } from "lucide-react";
 import { getAuthProviders, loginDemo, providerStartUrl } from "./api";
 import { LOGO_WORDMARK } from "./logo";
+import { useFocusTrap } from "./useFocusTrap";
 
 // Sign in with Google / Apple. Real OAuth redirects when the provider is
 // configured on the backend; otherwise a one-tap demo login is used.
@@ -9,6 +10,7 @@ export default function LoginModal({ open, onClose, onLogin, t }) {
   const [providers, setProviders] = useState(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState("");
+  const trapRef = useFocusTrap(open, onClose);
 
   useEffect(() => {
     if (open && !providers) getAuthProviders().then(setProviders).catch(() => setProviders({ google: { demo: true }, apple: { demo: true } }));
@@ -45,7 +47,7 @@ export default function LoginModal({ open, onClose, onLogin, t }) {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm" />
-      <div className="relative bg-cream-50 w-full max-w-sm rounded-3xl p-8 shadow-pop" onClick={(e) => e.stopPropagation()}>
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={t("login_title")} tabIndex={-1} className="relative bg-cream-50 w-full max-w-sm rounded-3xl p-8 shadow-pop" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} aria-label="Close" className="absolute top-4 end-4 grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft"><X size={20} /></button>
         <div className="mb-3">
           <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
