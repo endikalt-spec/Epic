@@ -25,7 +25,7 @@ services:
   - type: web
     name: vau-api
     runtime: docker
-    repo: https://github.com/endikalt-spec/Epic
+    repo: https://github.com/endikalt-spec/vau
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     region: frankfurt
@@ -102,7 +102,7 @@ services:
   - type: web
     name: vau-web
     runtime: static
-    repo: https://github.com/endikalt-spec/Epic
+    repo: https://github.com/endikalt-spec/vau
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
