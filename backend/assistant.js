@@ -126,8 +126,11 @@ async function recommend({ messages = [], recipient = null, catalog = [], lang =
   if (config.assistant.hasKey) {
     try {
       return await claudeRecommend({ messages, recipient, catalog, lang });
-    } catch {
-      // Fall through to the deterministic recommender on any API failure/refusal.
+    } catch (e) {
+      // Fall back to the deterministic recommender on any API failure/refusal —
+      // but log it, so a misconfigured key/model/billing is visible in the
+      // deploy logs instead of silently degrading to the rule-based path.
+      console.error('[assistant] Claude call failed, using rule-based fallback:', e.message);
     }
   }
   return ruleBasedRecommend({ text: lastUser, recipient, catalog, lang });
