@@ -77,6 +77,13 @@ function withUserLock(key, fn) {
   return next;
 }
 
+// A human landing on the bare API domain (e.g. checking api.vaugift.com in a
+// browser) would otherwise hit Express's default "Cannot GET /" — replace it
+// with a small, honest status page instead.
+app.get('/', (_req, res) => {
+  res.json({ name: 'VAU API', status: 'ok', docs: 'https://vaugift.com', health: '/health' });
+});
+
 // Liveness: process is up. Readiness: also verifies DB connectivity so a
 // load balancer / uptime check doesn't route traffic to an instance whose DB
 // is down.
