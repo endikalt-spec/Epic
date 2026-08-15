@@ -1,0 +1,465 @@
+<title>Запуск vaugift.com</title>
+<style>
+  :root {
+    /* Light — warm cream, VAU brand */
+    --ground: #FFF6EF;
+    --surface: #FFFFFF;
+    --surface-2: #FDF3EA;
+    --ink: #1B1510;
+    --ink-soft: #6B5D51;
+    --ink-faint: #9C8E80;
+    --line: #ECE0D3;
+    --line-strong: #DFD0BF;
+    --coral: #ED3A1C;
+    --coral-soft: #FF5436;
+    --coral-wash: #FDE7E0;
+    --teal: #0E9E86;
+    --teal-wash: #DDF3EE;
+    --sun: #E0912A;
+    --sun-wash: #FBEBD3;
+    --shadow: 0 1px 2px rgba(27,21,16,.05), 0 12px 30px -18px rgba(27,21,16,.22);
+    --ring: 0 0 0 3px rgba(237,58,28,.32);
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #16100C;
+      --surface: #201811;
+      --surface-2: #271D15;
+      --ink: #FBF2E8;
+      --ink-soft: #B7A797;
+      --ink-faint: #877868;
+      --line: #352819;
+      --line-strong: #453520;
+      --coral: #FF6A4D;
+      --coral-soft: #FF7C61;
+      --coral-wash: #3A1B13;
+      --teal: #34D3B8;
+      --teal-wash: #123029;
+      --sun: #F4B455;
+      --sun-wash: #362613;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 34px -20px rgba(0,0,0,.7);
+      --ring: 0 0 0 3px rgba(255,106,77,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #16100C;
+    --surface: #201811;
+    --surface-2: #271D15;
+    --ink: #FBF2E8;
+    --ink-soft: #B7A797;
+    --ink-faint: #877868;
+    --line: #352819;
+    --line-strong: #453520;
+    --coral: #FF6A4D;
+    --coral-soft: #FF7C61;
+    --coral-wash: #3A1B13;
+    --teal: #34D3B8;
+    --teal-wash: #123029;
+    --sun: #F4B455;
+    --sun-wash: #362613;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 16px 34px -20px rgba(0,0,0,.7);
+    --ring: 0 0 0 3px rgba(255,106,77,.4);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px 88px; }
+
+  /* ─── Header / launch gauge ─── */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--ground) 88%, transparent);
+    backdrop-filter: saturate(1.2) blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .head-inner { max-width: 940px; margin: 0 auto; padding: 18px 20px 16px; }
+  .brand-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .wordmark { font-size: 26px; font-weight: 850; letter-spacing: -.02em; color: var(--coral); }
+  .wordmark span { color: var(--ink); }
+  .eyebrow {
+    font-size: 11.5px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  h1 {
+    font-size: clamp(27px, 5vw, 40px); font-weight: 850; letter-spacing: -.025em;
+    line-height: 1.05; margin: 12px 0 4px; text-wrap: balance;
+  }
+  .sub { color: var(--ink-soft); font-size: 15px; margin: 0 0 18px; max-width: 60ch; }
+
+  .gauge { display: flex; align-items: center; gap: 16px; }
+  .gauge-track {
+    position: relative; flex: 1; height: 12px; border-radius: 99px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .gauge-fill {
+    position: absolute; inset: 0 auto 0 0; width: 0%;
+    background: linear-gradient(90deg, var(--coral-soft), var(--coral));
+    border-radius: 99px;
+    transition: width .55s cubic-bezier(.16,1,.3,1);
+  }
+  .gauge-num {
+    font-variant-numeric: tabular-nums; font-weight: 800; font-size: 15px;
+    white-space: nowrap; color: var(--ink);
+  }
+  .gauge-num b { color: var(--coral); font-size: 20px; }
+
+  .launch-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
+    padding: 7px 13px; border-radius: 99px;
+    background: var(--surface-2); color: var(--ink-faint);
+    border: 1px solid var(--line-strong);
+    transition: all .4s ease;
+  }
+  .launch-badge.ready {
+    background: var(--teal-wash); color: var(--teal);
+    border-color: color-mix(in srgb, var(--teal) 45%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal) 12%, transparent);
+  }
+  .launch-badge .dot {
+    width: 8px; height: 8px; border-radius: 99px; background: currentColor; opacity: .6;
+  }
+  .launch-badge.ready .dot { opacity: 1; animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{ transform: scale(1); opacity: 1; } 50%{ transform: scale(1.5); opacity: .5; } }
+
+  .req-note { font-size: 12.5px; color: var(--ink-faint); margin-top: 10px; }
+  .req-note b { color: var(--coral); font-variant-numeric: tabular-nums; }
+
+  /* ─── Sections ─── */
+  main { margin-top: 30px; display: flex; flex-direction: column; gap: 26px; }
+  .section { animation: rise .5s cubic-bezier(.16,1,.3,1) backwards; }
+  .sec-head { display: flex; align-items: center; gap: 13px; margin-bottom: 12px; }
+  .sec-n {
+    flex: none; width: 30px; height: 30px; border-radius: 9px;
+    display: grid; place-items: center;
+    font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums;
+    background: var(--coral-wash); color: var(--coral);
+    border: 1px solid color-mix(in srgb, var(--coral) 22%, transparent);
+  }
+  .sec-title { font-size: 19px; font-weight: 800; letter-spacing: -.01em; margin: 0; }
+  .sec-desc { color: var(--ink-soft); font-size: 13.5px; margin: 1px 0 0; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .item {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 14px;
+    padding: 15px 17px; cursor: pointer; width: 100%; text-align: start;
+    background: none; border: 0; border-top: 1px solid var(--line);
+    color: inherit; font: inherit;
+    transition: background .15s ease;
+  }
+  .item:first-child { border-top: 0; }
+  .item:hover { background: var(--surface-2); }
+  .item:focus-visible { outline: none; box-shadow: var(--ring) inset; }
+  .item.warn { border-inline-start: 3px solid var(--sun); padding-inline-start: 14px; }
+
+  .box {
+    flex: none; margin-top: 1px; width: 22px; height: 22px; border-radius: 7px;
+    border: 2px solid var(--line-strong); background: var(--surface);
+    display: grid; place-items: center; transition: all .2s ease;
+  }
+  .box svg { width: 13px; height: 13px; }
+  .box path { stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; fill: none;
+    stroke-dasharray: 20; stroke-dashoffset: 20; transition: stroke-dashoffset .25s ease .05s; }
+  .item.done .box { background: var(--teal); border-color: var(--teal); }
+  .item.done .box path { stroke-dashoffset: 0; }
+
+  .it-body { min-width: 0; }
+  .it-title { font-size: 15px; font-weight: 650; letter-spacing: -.005em; }
+  .item.done .it-title { color: var(--ink-soft); text-decoration: line-through; text-decoration-color: var(--line-strong); }
+  .it-desc { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+  .it-desc code {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--surface-2); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--line);
+    color: var(--ink); white-space: nowrap;
+  }
+
+  .chip {
+    flex: none; margin-top: 2px; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+    padding: 4px 9px; border-radius: 99px; white-space: nowrap;
+  }
+  .chip.req  { background: var(--coral-wash); color: var(--coral); }
+  .chip.warn { background: var(--sun-wash); color: var(--sun); }
+  .chip.auto { background: var(--teal-wash); color: var(--teal); }
+  .chip.done { background: var(--teal-wash); color: var(--teal); }
+  .chip.opt  { background: var(--surface-2); color: var(--ink-faint); border: 1px solid var(--line); }
+
+  /* ─── Reference strip ─── */
+  .ref { margin-top: 40px; display: grid; gap: 18px; }
+  .ref-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; }
+  @media (max-width: 680px) { .ref-grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; box-shadow: var(--shadow); padding: 18px 19px;
+  }
+  .panel h3 {
+    font-size: 11.5px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase;
+    color: var(--ink-faint); margin: 0 0 14px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: start; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+  tr:last-child td { border-bottom: 0; }
+  td.mono, .mono { font-family: var(--font-mono); font-size: 12px; color: var(--ink); }
+  td .t { color: var(--coral); font-weight: 700; }
+
+  .cost { display: flex; flex-direction: column; gap: 3px; }
+  .cost .big { font-size: 30px; font-weight: 850; letter-spacing: -.02em; }
+  .cost .big span { color: var(--coral); }
+  .cost .row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--ink-soft); padding: 4px 0; border-top: 1px dashed var(--line); }
+  .cost .row:first-of-type { border-top: 0; margin-top: 6px; }
+  .cost .row b { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  .endpoints code { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--ink);
+    padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 7px; overflow-x: auto; }
+  .endpoints code:last-child { margin-bottom: 0; }
+  .endpoints .ok { color: var(--teal); }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag { font-size: 12px; font-weight: 650; padding: 6px 11px; border-radius: 99px;
+    background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-soft); }
+  .tag::before { content: "✓ "; color: var(--teal); font-weight: 800; }
+
+  footer { margin-top: 34px; text-align: center; color: var(--ink-faint); font-size: 12px; }
+  footer b { color: var(--ink-soft); }
+
+  .reset { background: none; border: 0; color: var(--ink-faint); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 4px; }
+  .reset:hover { color: var(--coral); }
+  .reset:focus-visible { outline: none; box-shadow: var(--ring); border-radius: 6px; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  }
+</style>
+
+<header>
+  <div class="head-inner">
+    <div class="brand-row">
+      <div class="wordmark">VAU<span>·</span></div>
+      <div class="eyebrow">Пред-полётный чек-лист · vaugift.com</div>
+    </div>
+    <h1>Чек-лист запуска</h1>
+    <p class="sub">Площадка подарков-впечатлений — от готового кода до живого сайта на&nbsp;Render&nbsp;+&nbsp;Cloudflare. Отмечайте пункты по мере готовности; прогресс сохраняется в этом браузере.</p>
+    <div class="gauge">
+      <div class="gauge-num"><b id="g-done">0</b> / <span id="g-total">0</span></div>
+      <div class="gauge-track"><div class="gauge-fill" id="g-fill"></div></div>
+      <div class="launch-badge" id="badge"><span class="dot"></span><span id="badge-txt">Не готово</span></div>
+    </div>
+    <div class="req-note">Обязательных до запуска осталось: <b id="req-left">0</b>. <button class="reset" id="reset">сбросить</button></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <main id="app"></main>
+
+  <section class="ref">
+    <div class="ref-grid">
+      <div class="panel">
+        <h3>DNS для vaugift.com</h3>
+        <table>
+          <thead><tr><th>Хост</th><th>Тип</th><th>Куда указывает</th></tr></thead>
+          <tbody>
+            <tr><td class="mono t">vaugift.com</td><td class="mono">A / ALIAS</td><td class="mono">Render (static)</td></tr>
+            <tr><td class="mono t">www.vaugift.com</td><td class="mono">CNAME</td><td class="mono">vau-web.onrender.com</td></tr>
+            <tr><td class="mono t">api.vaugift.com</td><td class="mono">CNAME</td><td class="mono">vau-api.onrender.com</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:12px;color:var(--ink-soft);margin:12px 0 0">Cloudflare спереди: proxy&nbsp;ON, SSL&nbsp;<b>Full&nbsp;(strict)</b>. Почта: SPF&nbsp;+&nbsp;DKIM&nbsp;+&nbsp;DMARC из Brevo.</p>
+      </div>
+      <div class="panel">
+        <h3>Стоимость на старте</h3>
+        <div class="cost">
+          <div class="big">≈ <span>$15–20</span>/мес</div>
+          <div class="row"><span>Фронт (static + CDN)</span><b>бесплатно</b></div>
+          <div class="row"><span>API (starter)</span><b>~$7</b></div>
+          <div class="row"><span>Postgres (managed)</span><b>~$7</b></div>
+          <div class="row"><span>Регион</span><b>Frankfurt</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ref-grid">
+      <div class="panel endpoints">
+        <h3>Проверка после деплоя</h3>
+        <code>curl https://api.vaugift.com/health/ready<br>&nbsp;&nbsp;→ <span class="ok">{"status":"ready"}</span></code>
+        <code>curl https://api.vaugift.com/api/experiences</code>
+        <code>Админка → https://vaugift.com/?v=admin</code>
+      </div>
+      <div class="panel">
+        <h3>Уже готово в коде</h3>
+        <div class="tags">
+          <span class="tag">render.yaml</span>
+          <span class="tag">идемпотентная миграция</span>
+          <span class="tag">домен vaugift.com</span>
+          <span class="tag">helmet + CORS</span>
+          <span class="tag">rate-limit</span>
+          <span class="tag">2FA + локаут</span>
+          <span class="tag">honest-failure чекаут</span>
+          <span class="tag">демо-режим</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>Сгенерировано для владельца <b>vaugift.com</b> · держите этот лист под рукой во время запуска</footer>
+</div>
+
+<script>
+const SECTIONS = [
+  { n: 1, title: "Хостинг и деплой", desc: "Render Blueprint поднимает БД + API + фронт из одного файла", items: [
+    { id: "repo",      t: "Репозиторий в GitHub", d: "<code>endikalt-spec/Epic</code>, ветка с готовым кодом", own: "done" },
+    { id: "blueprint", t: "Render → New → Blueprint → выбрать репозиторий", d: "<code>render.yaml</code> создаёт vau-db, vau-api, vau-web (Frankfurt)", own: "you", req: true },
+    { id: "migrate",   t: "Первый деплой мигрирует БД", d: "<code>node init-db.js</code> — схема + сид каталога, идемпотентно", own: "auto" },
+    { id: "domains",   t: "Подключить домены в Render", d: "vaugift.com, www.vaugift.com, api.vaugift.com", own: "you", req: true },
+  ]},
+  { n: 2, title: "DNS для vaugift.com", desc: "Указать домен на сервисы; Cloudflare спереди — TLS, CDN, DDoS", items: [
+    { id: "dns",        t: "Записи DNS настроены", d: "по таблице ниже; Cloudflare proxy ON, SSL Full (strict)", own: "you", req: true },
+    { id: "email-auth", t: "Аутентификация почты домена", d: "Brevo → Authenticate vaugift.com → добавить SPF / DKIM / DMARC", own: "you", req: true },
+  ]},
+  { n: 3, title: "Секреты и переменные", desc: "В дашборде хостинга — никогда не в git", items: [
+    { id: "signing",    t: "JWT_SECRET и VOUCHER_SECRET", d: "Render генерирует автоматически", own: "auto" },
+    { id: "adminpass",  t: "ADMIN_PASSWORD — сильный пароль", d: "для admin@vaugift.com", own: "you", req: true },
+    { id: "adminphone", t: "ADMIN_PHONE в формате E.164", d: "включает восстановление доступа по SMS", own: "you", req: true },
+  ]},
+  { n: 4, title: "Интеграции go-live", desc: "Пока ключи пустые — приложение работает в безопасном fallback", items: [
+    { id: "brevo-rotate", t: "Ротировать Brevo-ключ", d: "старый ключ был в переписке — заменить на новый", own: "you", req: true, warn: true },
+    { id: "brevo-on",     t: "EMAIL_TRANSPORT=brevo и CRM_PROVIDER=brevo", d: "после верификации домена в Brevo", own: "you", req: true },
+    { id: "stripe",       t: "Stripe live-ключи + вебхук", d: "вебхук на <code>/api/payments/webhook</code>, затем PAYMENT_PROVIDER=stripe", own: "you", req: true },
+    { id: "anthropic",    t: "ANTHROPIC_API_KEY", d: "ассистент на Claude вместо правил", own: "opt" },
+  ]},
+  { n: 5, title: "Юридическое и безопасность", desc: "Перед приёмом реальных клиентов", items: [
+    { id: "company",  t: "Заполнить реквизиты в company.js", d: "название компании, ח.פ., адрес, телефон", own: "you", req: true },
+    { id: "lawyer",   t: "Юрист вычитывает оферту и политику", d: "Terms + Privacy под израильское право", own: "you", req: true },
+    { id: "2fa",      t: "Включить 2FA для каждого админа", d: "после первого входа в /?v=admin", own: "you", req: true },
+    { id: "backups",  t: "Проверить ежедневные бэкапы Postgres", d: "Render → база → Backups", own: "you", req: true },
+    { id: "waf",      t: "Cloudflare WAF на api.vaugift.com", d: "правила rate-limit", own: "opt" },
+  ]},
+  { n: 6, title: "Проверка после деплоя", desc: "Прогнать один раз на живом сайте", items: [
+    { id: "v-health",   t: "/health/ready → ready", d: "API поднят и видит базу", own: "you" },
+    { id: "v-catalog",  t: "Каталог грузится из Postgres", d: "/api/experiences отдаёт впечатления", own: "you" },
+    { id: "v-checkout", t: "Чекаут → код сертификата + QR", d: "оплата тест-картой проходит", own: "you", req: true },
+    { id: "v-email",    t: "Письмо с сертификатом пришло", d: "после верификации Brevo-домена", own: "you" },
+    { id: "v-brevo",    t: "Клиент появился в Brevo → Contacts", d: "", own: "you" },
+    { id: "v-admin",    t: "Админка показывает заказ", d: "/?v=admin → дашборд", own: "you" },
+  ]},
+];
+
+const CHIP = {
+  warn: ["warn", "⚠ важно"],
+  req:  ["req", "обязательно"],
+  auto: ["auto", "авто"],
+  done: ["done", "готово"],
+  opt:  ["opt", "опц"],
+};
+const CHECK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const KEY = "vau_launch_checklist_v1";
+const allItems = SECTIONS.flatMap(s => s.items);
+const requiredIds = allItems.filter(i => i.req).map(i => i.id);
+
+// First-visit defaults: auto/done items start checked (no user action needed).
+function load() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY));
+    if (saved && typeof saved === "object") return saved;
+  } catch (e) { /* ignore */ }
+  const seed = {};
+  allItems.forEach(i => { if (i.own === "auto" || i.own === "done") seed[i.id] = true; });
+  return seed;
+}
+let state = load();
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } };
+
+function chipFor(it) {
+  const key = it.warn ? "warn" : it.req ? "req" : it.own === "auto" ? "auto" : it.own === "done" ? "done" : it.own === "opt" ? "opt" : null;
+  if (!key) return "";
+  const [cls, label] = CHIP[key];
+  return `<span class="chip ${cls}">${label}</span>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  app.innerHTML = SECTIONS.map((s, si) => `
+    <section class="section" style="animation-delay:${si * 55}ms">
+      <div class="sec-head">
+        <div class="sec-n">${s.n}</div>
+        <div>
+          <h2 class="sec-title">${s.title}</h2>
+          ${s.desc ? `<p class="sec-desc">${s.desc}</p>` : ""}
+        </div>
+      </div>
+      <div class="card">
+        ${s.items.map(it => `
+          <button class="item${state[it.id] ? " done" : ""}${it.warn ? " warn" : ""}" data-id="${it.id}"
+                  role="checkbox" aria-checked="${!!state[it.id]}">
+            <span class="box">${CHECK_SVG}</span>
+            <span class="it-body">
+              <span class="it-title">${it.t}</span>
+              ${it.d ? `<span class="it-desc">${it.d}</span>` : ""}
+            </span>
+            ${chipFor(it)}
+          </button>
+        `).join("")}
+      </div>
+    </section>
+  `).join("");
+
+  app.querySelectorAll(".item").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      state[id] = !state[id];
+      btn.classList.toggle("done", state[id]);
+      btn.setAttribute("aria-checked", String(!!state[id]));
+      save();
+      updateGauge();
+    });
+  });
+}
+
+function updateGauge() {
+  const done = allItems.filter(i => state[i.id]).length;
+  const total = allItems.length;
+  const reqDone = requiredIds.filter(id => state[id]).length;
+  const reqLeft = requiredIds.length - reqDone;
+
+  document.getElementById("g-done").textContent = done;
+  document.getElementById("g-total").textContent = total;
+  document.getElementById("g-fill").style.width = (done / total * 100) + "%";
+  document.getElementById("req-left").textContent = reqLeft;
+
+  const badge = document.getElementById("badge");
+  const txt = document.getElementById("badge-txt");
+  if (reqLeft === 0) {
+    badge.classList.add("ready");
+    txt.textContent = "🚀 Готово к запуску";
+  } else {
+    badge.classList.remove("ready");
+    txt.textContent = "Не готово";
+  }
+}
+
+document.getElementById("reset").addEventListener("click", () => {
+  state = {};
+  allItems.forEach(i => { if (i.own === "auto" || i.own === "done") state[i.id] = true; });
+  save();
+  render();
+  updateGauge();
+});
+
+render();
+updateGauge();
+</script>
