@@ -14,8 +14,8 @@ export const COMPANY = {
   phone: "", // TODO: customer-support phone number
 
   // Sensible defaults on the project's own domain — override if different.
-  supportEmail: "support@vau.co.il",
-  dpoEmail: "privacy@vau.co.il",
+  supportEmail: "support@vaugift.com",
+  dpoEmail: "privacy@vaugift.com",
 
   // Exclusive jurisdiction already chosen in the drafts (Tel Aviv-Yafo).
   jurisdiction: { he: "תל אביב-יפו", ru: "Тель-Авив-Яффо" },

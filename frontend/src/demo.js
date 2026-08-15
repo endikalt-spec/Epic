@@ -135,7 +135,7 @@ export default {
   async _adminState() {
     const st = readJSON("vau_demo_admin", null);
     if (st) return st;
-    const seed = { email: "admin@vau.co.il", password: "vau-admin", phone: "+972500000000", failed: 0, lockedUntil: 0, twoFactor: false, recovery: null };
+    const seed = { email: "admin@vaugift.com", password: "vau-admin", phone: "+972500000000", failed: 0, lockedUntil: 0, twoFactor: false, recovery: null };
     writeJSON("vau_demo_admin", seed);
     return seed;
   },

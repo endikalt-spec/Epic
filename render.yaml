@@ -1,0 +1,125 @@
+# VAU — Render Blueprint (Infrastructure as Code)
+# ---------------------------------------------------------------------------
+# One file provisions the whole stack on Render:
+#   • vau-db   — managed PostgreSQL (daily backups)
+#   • vau-api  — Node/Express backend (Docker image, health-checked)
+#   • vau-web  — the React SPA served as a global static site
+#
+# Deploy:  Render Dashboard → New → Blueprint → pick this repo.
+# Region:  Frankfurt (eu-central) — the closest Render region to Israel (~60-80ms).
+#
+# Secrets marked `sync: false` are NOT stored in git — you paste them once in the
+# Render dashboard (or leave blank to keep that provider in safe fallback mode).
+# Secrets marked `generateValue: true` are generated strong+random by Render.
+# ---------------------------------------------------------------------------
+
+databases:
+  - name: vau-db
+    databaseName: vau
+    plan: basic-256mb          # bump to basic-1gb as traffic grows
+    region: frankfurt
+    postgresMajorVersion: "16"
+
+services:
+  # ── Backend API ──────────────────────────────────────────────────────────
+  - type: web
+    name: vau-api
+    runtime: docker
+    repo: https://github.com/endikalt-spec/Epic
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: frankfurt
+    plan: starter              # 512MB; enough to launch, scale up later
+    healthCheckPath: /health/ready
+    # Apply schema + (first-time) seed before each deploy. init-db is idempotent:
+    # schema uses IF NOT EXISTS and the seed only loads into an empty catalog.
+    preDeployCommand: node init-db.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vau-db
+          property: connectionString
+      # Strong signing secrets — generated once, never in git.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: VOUCHER_SECRET
+        generateValue: true
+      # Public URLs (used in QR redemption links, OAuth redirects, CORS).
+      - key: PUBLIC_URL
+        value: https://vaugift.com
+      - key: API_URL
+        value: https://api.vaugift.com
+      - key: CORS_ORIGIN
+        value: https://vaugift.com,https://www.vaugift.com
+      - key: TRUST_PROXY
+        value: "1"                       # Render puts one proxy in front
+      # First admin (auto-created on first boot). Set a STRONG password in the
+      # dashboard; phone (E.164) enables SMS account recovery.
+      - key: ADMIN_EMAIL
+        value: admin@vaugift.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_PHONE
+        sync: false
+      # Payments — starts on the mock gateway; flip to stripe once keys are set.
+      - key: PAYMENT_PROVIDER
+        value: mock
+      - key: PAYMENT_CURRENCY
+        value: ILS
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # E-voucher email via Brevo (verify the vaugift.com sender first, else
+      # leave EMAIL_TRANSPORT=log until the domain is verified).
+      - key: EMAIL_TRANSPORT
+        value: brevo
+      - key: EMAIL_FROM
+        value: VAU <no-reply@vaugift.com>
+      # CRM mirror + transactional SMS recovery, both on Brevo.
+      - key: CRM_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_LIST_ID
+        sync: false
+      - key: SMS_PROVIDER
+        value: brevo
+      - key: SMS_SENDER
+        value: VAU
+      # AI gift assistant — with a key it uses Claude, without it a rule-based
+      # recommender (feature still works either way).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: POLICY_VERSION
+        value: "2026-08"
+
+  # ── Frontend SPA (static site, global CDN) ───────────────────────────────
+  - type: web
+    name: vau-web
+    runtime: static
+    repo: https://github.com/endikalt-spec/Epic
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      # Baked into the build — points the SPA at the API subdomain.
+      - key: VITE_API_URL
+        value: https://api.vaugift.com/api
+    routes:
+      # SPA fallback: every path (incl. /redeem?code=… from voucher QR codes)
+      # serves index.html so client-side routing can take over.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff

@@ -37,7 +37,7 @@ const config = {
   // First admin, auto-created on startup if no admin exists yet. In production
   // set a strong password; in dev it defaults so the panel is testable.
   adminBootstrap: {
-    email: process.env.ADMIN_EMAIL || 'admin@vau.co.il',
+    email: process.env.ADMIN_EMAIL || 'admin@vaugift.com',
     password: process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'vau-admin-2026'),
     phone: process.env.ADMIN_PHONE || '',
   },
@@ -90,7 +90,7 @@ const config = {
   email: {
     // transport: 'log' (default, prints to console) | 'smtp'
     transport: process.env.EMAIL_TRANSPORT || 'log',
-    from: process.env.EMAIL_FROM || 'VAU <no-reply@vau.co.il>',
+    from: process.env.EMAIL_FROM || 'VAU <no-reply@vaugift.com>',
     smtp: {
       host: process.env.SMTP_HOST || '',
       port: Number(process.env.SMTP_PORT || 587),

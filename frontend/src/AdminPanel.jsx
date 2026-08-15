@@ -44,7 +44,7 @@ export default function AdminPanel({ lang = "he", goHome }) {
   const T = (k) => TXT[k]?.[lang] ?? TXT[k]?.he ?? k;
   const rtl = lang === "he";
   const [step, setStep] = useState("login");     // login | twofa | recover | recoverVerify | dashboard
-  const [email, setEmail] = useState(DEMO ? "admin@vau.co.il" : "");
+  const [email, setEmail] = useState(DEMO ? "admin@vaugift.com" : "");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
   const [error, setError] = useState("");
@@ -96,7 +96,7 @@ export default function AdminPanel({ lang = "he", goHome }) {
 
         {DEMO && step === "login" && (
           <div className="rounded-xl bg-teal-50 text-teal-800 text-xs px-4 py-3 mb-4">
-            {lang === "ru" ? "Демо-доступ: " : "גישת דמו: "}<b>admin@vau.co.il</b> / <b>vau-admin</b>
+            {lang === "ru" ? "Демо-доступ: " : "גישת דמו: "}<b>admin@vaugift.com</b> / <b>vau-admin</b>
           </div>
         )}
         {error && <div className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 mb-4">{error}</div>}

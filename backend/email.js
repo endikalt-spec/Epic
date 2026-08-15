@@ -6,7 +6,7 @@
 const nodemailer = require('nodemailer');
 const config = require('./config');
 
-// Parse "VAU <no-reply@vau.co.il>" into a { name, email } sender.
+// Parse "VAU <no-reply@vaugift.com>" into a { name, email } sender.
 function parseSender(from) {
   const m = /^\s*"?(.*?)"?\s*<([^>]+)>\s*$/.exec(from || '');
   return m ? { name: m[1].trim(), email: m[2].trim() } : { email: (from || '').trim() };
