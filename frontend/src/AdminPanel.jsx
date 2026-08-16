@@ -63,6 +63,7 @@ export default function AdminPanel({ lang = "he", goHome }) {
     try {
       const res = await adminLogin({ email, password, totp: withTotp ? totp : undefined });
       if (res.needs2fa) { setStep("twofa"); return; }
+      localStorage.setItem("vau_admin_token", res.token);
       setAdmin(res.admin); setStep("dashboard");
     } catch (e) {
       const d = e?.response?.data; const s = e?.response?.status;
