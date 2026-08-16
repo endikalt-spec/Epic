@@ -255,11 +255,18 @@ function Security({ lang, T, admin }) {
   const [setup, setSetup] = useState(null);
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
-  const start = async () => { setErr(""); setSetup(await admin2faSetup()); };
+  const [busy, setBusy] = useState(false);
+  const start = async () => {
+    setErr(""); setBusy(true);
+    try { setSetup(await admin2faSetup()); }
+    catch { setErr(lang === "ru" ? "Не удалось начать настройку. Попробуйте ещё раз." : "לא ניתן היה להתחיל בהגדרה. נסו שוב."); }
+    finally { setBusy(false); }
+  };
   const enable = async () => {
-    setErr("");
+    setErr(""); setBusy(true);
     try { await admin2faEnable(code); setEnabled(true); setSetup(null); }
     catch { setErr(lang === "ru" ? "Неверный код." : "קוד שגוי."); }
+    finally { setBusy(false); }
   };
   return (
     <div className="max-w-xl bg-white rounded-2xl shadow-soft p-6">
@@ -268,7 +275,12 @@ function Security({ lang, T, admin }) {
       {enabled ? (
         <div className="rounded-xl bg-teal-50 text-teal-700 font-bold px-4 py-3 inline-flex items-center gap-2"><Check size={16} /> {T("twoFaOn")}</div>
       ) : !setup ? (
-        <button onClick={start} className="inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-5 py-2.5 font-bold"><KeyRound size={16} /> {T("enable2fa")}</button>
+        <>
+          {err && <div className="text-coral-600 text-sm font-semibold mb-3">{err}</div>}
+          <button onClick={start} disabled={busy} className="inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-5 py-2.5 font-bold disabled:opacity-60">
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />} {T("enable2fa")}
+          </button>
+        </>
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-ink-600">{T("scan")}</p>
@@ -276,7 +288,7 @@ function Security({ lang, T, admin }) {
           {err && <div className="text-coral-600 text-sm font-semibold">{err}</div>}
           <div className="flex gap-2">
             <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" className={`${inp} tracking-[0.3em] text-center max-w-[140px]`} />
-            <button onClick={enable} className="rounded-full bg-coral-500 text-white px-5 py-2.5 font-bold">{T("verify")}</button>
+            <button onClick={enable} disabled={busy} className="rounded-full bg-coral-500 text-white px-5 py-2.5 font-bold disabled:opacity-60">{busy ? <Loader2 size={16} className="animate-spin" /> : T("verify")}</button>
           </div>
         </div>
       )}
