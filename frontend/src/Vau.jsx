@@ -435,7 +435,7 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
           <a href="#top" className="flex items-center select-none">
             <img src={LOGO_WORDMARK} alt="VAU" className="h-8 sm:h-9 w-auto" />
           </a>
-          <nav className="hidden lg:flex items-center gap-1">
+          <nav className="hidden xl:flex items-center gap-1">
             {links.map((l) => (
               l.action ? (
                 <button key={l.key} onClick={l.action} className="px-3 py-2 text-sm font-bold text-ink-600 hover:text-coral-600 transition-colors rounded-lg">
@@ -463,32 +463,32 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
             ))}
           </div>
 
-          <button onClick={goRedeem} className="hidden lg:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+          <button onClick={goRedeem} className="hidden xl:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
             <Ticket size={16} /> {t("redeem_voucher")}
           </button>
 
           {user ? (
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden xl:flex items-center gap-2">
               <span className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold" title={user.name}>
                 {(user.name || "U").charAt(0).toUpperCase()}
               </span>
               <button onClick={onSignOut} className="text-xs font-bold text-ink-500 hover:text-coral-600">{t("sign_out")}</button>
             </div>
           ) : (
-            <button onClick={onSignIn} className="hidden lg:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+            <button onClick={onSignIn} className="hidden xl:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
               <LogIn size={16} /> {t("sign_in")}
             </button>
           )}
 
           <button onClick={openDrawer} className="relative inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-3.5 sm:px-4 py-2.5 text-sm font-bold hover:bg-ink-800 transition-colors">
             <Gift size={17} />
-            <span className="hidden lg:inline">{t("gift_box")}</span>
+            <span className="hidden xl:inline">{t("gift_box")}</span>
             {giftCount > 0 && (
               <span className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-coral-500 text-white text-[11px] font-extrabold">{giftCount}</span>
             )}
           </button>
 
-          <button onClick={() => setMenuOpen(true)} aria-label={t("menu") || "Menu"} className="lg:hidden grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft text-ink-900">
+          <button onClick={() => setMenuOpen(true)} aria-label={t("menu") || "Menu"} className="xl:hidden grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft text-ink-900">
             <Menu size={20} />
           </button>
         </div>
@@ -496,7 +496,7 @@ function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
+        <div className="xl:hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
           <div ref={menuRef} role="dialog" aria-modal="true" aria-label="Menu" tabIndex={-1} className="absolute top-0 inset-x-0 bg-cream-50 rounded-b-3xl p-6 shadow-pop animate-rise" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6">
               <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
