@@ -97,6 +97,10 @@ services:
         sync: false
       - key: POLICY_VERSION
         value: "2026-08"
+      # Voucher validity: 12 months from purchase (business decision; see the
+      # note in config.js about Israel's 5-year minimum for gift vouchers).
+      - key: VOUCHER_VALIDITY_DAYS
+        value: "365"
 
   # ── Frontend SPA (static site, global CDN) ───────────────────────────────
   - type: web

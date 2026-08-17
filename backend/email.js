@@ -42,32 +42,101 @@ function getTransport() {
   return transporter;
 }
 
+// DD/MM/YYYY — the format the business asked for, independent of server locale.
+function formatExpiry(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+// The e-voucher email. It deliberately does NOT reveal the voucher up front:
+// the recipient sees a closed gift box and opens it on the site, where the
+// unwrapping animation runs (email clients don't execute JavaScript, so the
+// animation itself cannot live in here). The code is still printed at the
+// bottom as a fallback, so a blocked image or link never costs someone a
+// voucher they paid for.
 function voucherEmailHtml({ voucher, experienceTitle, buyerName }) {
-  const typeLabel = voucher.type === 'personalized' ? 'שובר אישי / Именной ваучер' : 'שובר להעברה / Ваучер на предъявителя';
+  const personalized = voucher.type === 'personalized';
+  const typeLabelHe = personalized ? 'שובר אישי' : 'שובר להעברה';
+  const typeLabelRu = personalized ? 'Именной ваучер' : 'Ваучер на предъявителя';
+  const expiry = formatExpiry(voucher.expiresAt || voucher.expires_at);
+  const giftUrl = voucher.giftUrl || voucher.url;
+  // Hosted (not data:) so Gmail actually renders it.
+  const logo = new URL('/logo-full.png', config.publicUrl).toString();
+
   return `<!doctype html><html><body style="margin:0;background:#fff6ef;font-family:Arial,Helvetica,sans-serif;color:#1b1510">
   <div style="max-width:560px;margin:0 auto;padding:32px 20px">
-    <div style="font-size:28px;font-weight:800;color:#ed3a1c">VAU</div>
-    <div style="background:#fff;border-radius:24px;padding:28px;margin-top:16px;box-shadow:0 8px 24px -8px rgba(27,21,16,.12)">
-      <h1 style="font-size:22px;margin:0 0 8px">🎁 המתנה שלך מוכנה! / Ваш подарок готов!</h1>
-      ${buyerName ? `<p style="color:#5a4e42;margin:0 0 16px">From ${buyerName}</p>` : ''}
-      ${experienceTitle ? `<p style="font-weight:700;margin:0 0 16px">${experienceTitle}</p>` : ''}
-      <div style="border:2px dashed #ff9c82;border-radius:16px;padding:18px;text-align:center;margin:16px 0">
-        <div style="font-size:12px;color:#8c8072;text-transform:uppercase;letter-spacing:1px">Voucher code</div>
-        <div style="font-size:26px;font-weight:800;letter-spacing:3px;color:#ed3a1c">${voucher.code}</div>
-        <div style="font-size:12px;color:#8c8072;margin-top:6px">${typeLabel}</div>
-      </div>
-      <div style="text-align:center;margin:16px 0">
-        <img src="${voucher.qr}" alt="QR" width="180" height="180" style="border-radius:12px"/>
-        <div style="margin-top:12px"><img src="${voucher.barcode}" alt="barcode" style="max-width:100%"/></div>
-      </div>
-      <a href="${voucher.url}" style="display:block;text-align:center;background:#ff5436;color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:999px">
-        לממש עכשיו / Активировать
-      </a>
-      <p style="font-size:12px;color:#8c8072;margin-top:16px">
-        תקף עד / Действителен до: ${new Date(voucher.expiresAt || voucher.expires_at).toLocaleDateString('he-IL')}
-      </p>
+    <div style="text-align:center">
+      <img src="${logo}" alt="VAU" width="120" style="width:120px;height:auto;display:inline-block"/>
     </div>
-    <p style="text-align:center;color:#8c8072;font-size:12px;margin-top:16px">VAU · מתנות של חוויות · נבנה באהבה בישראל 🇮🇱</p>
+
+    <div style="background:#fff;border-radius:24px;padding:28px 24px;margin-top:18px;box-shadow:0 8px 24px -8px rgba(27,21,16,.12);text-align:center">
+      <h1 dir="rtl" style="font-size:22px;margin:0 0 2px">🎁 יש לכם מתנה!</h1>
+      <h1 dir="ltr" style="font-size:22px;margin:0 0 6px">Вам подарок!</h1>
+      ${buyerName ? `<p dir="rtl" style="color:#5a4e42;margin:0">מאת ${buyerName}</p><p dir="ltr" style="color:#5a4e42;margin:0 0 4px">от ${buyerName}</p>` : ''}
+      <p dir="rtl" style="color:#5a4e42;margin:0;font-size:14px">לחצו על הקופסה כדי לפתוח</p>
+      <p dir="ltr" style="color:#5a4e42;margin:0 0 20px;font-size:14px">Нажмите на коробку, чтобы открыть</p>
+
+      <!-- Gift box: table-based so Outlook renders it; the whole box is a link -->
+      <a href="${giftUrl}" style="text-decoration:none;display:inline-block">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto">
+          <tr>
+            <td style="padding-bottom:6px;text-align:center">
+              <!-- bow -->
+              <div style="font-size:34px;line-height:1">🎀</div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <!-- lid -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="220" style="width:220px">
+                <tr><td style="background:#1f3160;border-radius:10px;height:34px;text-align:center;color:#d9b45f;font-size:13px;font-weight:bold;letter-spacing:3px">V A U</td></tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding-top:4px">
+              <!-- body with a gold ribbon down the middle -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="200" style="width:200px;margin:0 auto">
+                <tr>
+                  <td width="80" style="background:#25396f;height:120px;border-bottom-left-radius:12px"></td>
+                  <td width="40" style="background:#d9b45f;height:120px"></td>
+                  <td width="80" style="background:#25396f;height:120px;border-bottom-right-radius:12px"></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </a>
+
+      <div style="margin-top:22px">
+        <a href="${giftUrl}" style="display:inline-block;background:#ff5436;color:#fff;text-decoration:none;font-weight:bold;padding:14px 34px;border-radius:999px;font-size:16px;line-height:1.35">
+          <span dir="rtl" style="display:block">לפתוח את המתנה</span>
+          <span dir="ltr" style="display:block">Открыть подарок</span>
+        </a>
+      </div>
+
+      ${experienceTitle ? `<p style="font-weight:bold;margin:20px 0 0;color:#1b1510">${experienceTitle}</p>` : ''}
+
+      <div style="margin-top:20px;padding:12px 14px;background:#fff6ef;border-radius:14px">
+        <div dir="rtl" style="font-size:12px;color:#8c8072;text-transform:uppercase;letter-spacing:1px">תקף עד</div>
+        <div dir="ltr" style="font-size:12px;color:#8c8072;text-transform:uppercase;letter-spacing:1px">Действителен до</div>
+        <div dir="ltr" style="font-size:22px;font-weight:bold;color:#1f3160;margin-top:2px">${expiry}</div>
+        <div dir="rtl" style="font-size:12px;color:#8c8072;margin-top:6px">12 חודשים מרגע הרכישה</div>
+        <div dir="ltr" style="font-size:12px;color:#8c8072">12 месяцев с момента покупки</div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border-radius:18px;padding:16px 20px;margin-top:12px;text-align:center">
+      <div dir="rtl" style="font-size:11px;color:#8c8072">אם הקישור לא נפתח — קוד השובר</div>
+      <div dir="ltr" style="font-size:11px;color:#8c8072">Если ссылка не открывается — код ваучера</div>
+      <div dir="ltr" style="font-size:20px;font-weight:bold;letter-spacing:3px;color:#ed3a1c;margin-top:6px">${voucher.code}</div>
+      <div dir="rtl" style="font-size:11px;color:#8c8072;margin-top:6px">${typeLabelHe}</div>
+      <div dir="ltr" style="font-size:11px;color:#8c8072">${typeLabelRu}</div>
+    </div>
+
+    <p dir="rtl" style="text-align:center;color:#8c8072;font-size:12px;margin-top:16px">VAU · מתנות של חוויות · נבנה באהבה בישראל 🇮🇱</p>
   </div></body></html>`;
 }
 

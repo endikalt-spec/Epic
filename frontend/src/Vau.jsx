@@ -12,6 +12,7 @@ import axios from "axios";
 import LoginModal from "./LoginModal";
 import AiAssistant from "./AiAssistant";
 import LegalView from "./LegalView";
+import GiftReveal from "./GiftReveal";
 import AdminPanel from "./AdminPanel";
 import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
 import { useFocusTrap } from "./useFocusTrap";
@@ -30,6 +31,9 @@ const scene = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=c
 function viewFromLocation() {
   const p = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
   const v = p.get("v");
+  // The gift-reveal link from the e-voucher email also carries ?code=, so it has
+  // to be matched before the redeem branch below.
+  if (v === "gift") return { view: "gift" };
   if (v === "redeem" || p.has("code")) return { view: "redeem" };
   if (v === "exchange") return { view: "exchange" };
   if (v === "terms") return { view: "legal", doc: "terms" };
@@ -308,6 +312,17 @@ export default function Vau() {
   const goLegal = (docType) => navigate("legal", docType);
   const goAdmin = () => navigate("admin");
   const goHome = () => navigate("home");
+  // From the gift-reveal page into redeem: keep code/token/signature in the URL
+  // so a reload still lands on a working redeem screen.
+  const goRedeemWithCode = (voucherCode) => {
+    const cur = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams({ v: "redeem" });
+    if (voucherCode) next.set("code", voucherCode);
+    if (cur.get("t")) next.set("t", cur.get("t"));
+    if (cur.get("s")) next.set("s", cur.get("s"));
+    setView("redeem"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0);
+    try { window.history.pushState({ v: "redeem" }, "", `${window.location.pathname}?${next}`); } catch { /* ignore */ }
+  };
   const changeLang = (l) => i18n.changeLanguage(l);
 
   // Sync view with browser back/forward.
@@ -323,6 +338,9 @@ export default function Vau() {
 
   if (view === "admin") {
     return <AdminPanel lang={lang} goHome={goHome} />;
+  }
+  if (view === "gift") {
+    return <GiftReveal t={t} rtl={rtl} goHome={goHome} goRedeemWithCode={goRedeemWithCode} />;
   }
   if (view === "redeem") {
     return <RedeemView goHome={goHome} loc={loc} t={t} rtl={rtl} />;

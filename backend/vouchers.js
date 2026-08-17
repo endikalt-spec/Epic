@@ -53,6 +53,17 @@ function redemptionUrl({ code, token, signature }) {
   return u.toString();
 }
 
+// Where the email's gift box points: the site's unwrapping page, which verifies
+// the voucher and plays the reveal animation before showing it.
+function giftUrl({ code, token, signature }) {
+  const u = new URL('/', config.publicUrl);
+  u.searchParams.set('v', 'gift');
+  u.searchParams.set('code', code);
+  u.searchParams.set('t', token);
+  u.searchParams.set('s', signature);
+  return u.toString();
+}
+
 async function qrDataUrl(text) {
   return QRCode.toDataURL(text, { margin: 1, width: 320, errorCorrectionLevel: 'M' });
 }
@@ -80,9 +91,10 @@ async function issue({ type = 'bearer', recipient = null } = {}) {
   const core = { code, token, type, recipientRef };
   const signature = sign(core);
   const url = redemptionUrl({ code, token, signature });
+  const gift = giftUrl({ code, token, signature });
   const [qr, barcode] = await Promise.all([qrDataUrl(url), barcodeDataUrl(code)]);
   const expiresAt = new Date(Date.now() + config.fraud.voucherValidityDays * 86400000);
-  return { ...core, signature, url, qr, barcode, expiresAt, recipient, status: 'active' };
+  return { ...core, signature, url, giftUrl: gift, qr, barcode, expiresAt, recipient, status: 'active' };
 }
 
-module.exports = { generateCode, generateToken, sign, verifySignature, redemptionUrl, qrDataUrl, barcodeDataUrl, issue };
+module.exports = { generateCode, generateToken, sign, verifySignature, redemptionUrl, giftUrl, qrDataUrl, barcodeDataUrl, issue };

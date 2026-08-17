@@ -12,7 +12,6 @@
   "checkout": "לרכישת המארז",
   "clear_box": "רוקן מארז",
   "total": "סה\"כ",
-
   "hero_badge": "מס' 1 בישראל למתנות חוויה",
   "hero_title_1": "מתנה אחת.",
   "hero_title_2": "עשרות חוויות.",
@@ -23,19 +22,16 @@
   "search_placeholder": "מה מחפשים? טיסה, ספא, סדנה...",
   "search_button": "חיפוש",
   "trust_secure": "תשלום מאובטח",
-  "trust_validity": "שובר בתוקף לשנתיים",
-  "trust_exchange": "החלפה חינם",
-
+  "trust_validity": "שובר בתוקף ל-12 חודשים",
+  "trust_exchange": "החלפה בלי תוספת",
   "stat_experiences": "חוויות נבחרות",
   "stat_reviews": "ביקורות אמת",
   "stat_partners": "ספקים מובילים",
   "stat_delivery": "משלוח דיגיטלי",
   "stat_delivery_val": "מיידי",
-
   "categories_title": "בחרו לפי קטגוריה",
   "categories_subtitle": "מאדרנלין ועד רוגע — יש וואו לכל אחד",
   "cat_all": "הכל",
-
   "how_title": "איך זה עובד?",
   "how_subtitle": "ארבעה צעדים למתנה שלא שוכחים",
   "how_1_title": "בוחרים מארז",
@@ -46,12 +42,10 @@
   "how_3_text": "המקבל נכנס עם הקוד ובוחר את החוויה שהכי מדברת אליו.",
   "how_4_title": "נהנים מהוואו",
   "how_4_text": "מתאמים מועד עם הספק ויוצאים לחוויה בלתי נשכחת.",
-
   "bestsellers_title": "הכי נמכרים החודש",
   "bestsellers_subtitle": "החוויות שכולם מדברים עליהן",
   "sort_popular": "פופולרי",
   "filter_all": "כל החוויות",
-
   "occasions_title": "מתנה לכל אירוע",
   "occasion_birthday": "יום הולדת",
   "occasion_anniversary": "יום נישואין",
@@ -59,7 +53,6 @@
   "occasion_thanks": "תודה",
   "occasion_corporate": "עובדים",
   "occasion_family": "משפחה",
-
   "card_details": "לפרטים",
   "card_add": "הוסף למארז",
   "card_added": "במארז",
@@ -68,7 +61,6 @@
   "buy_now": "רכישה עכשיו",
   "duration": "משך",
   "participants": "משתתפים",
-
   "reviews_title": "אלפי לקוחות עם וואו",
   "reviews_subtitle": "מה מספרים עלינו",
   "review_1": "קניתי מארז ליום הנישואין ובן הזוג פשוט נדהם. הבחירה שלו — טיסת בלון בזריחה. חוויה שלא נשכח.",
@@ -80,7 +72,6 @@
   "review_3": "התלבטתי מה לקנות לאבא שיש לו הכל. VAU פתרו לי את הבעיה — הוא בחר שיט קייקים והיה מאושר.",
   "review_3_name": "מיכל ב.",
   "review_3_role": "חיפה",
-
   "business_badge": "VAU לעסקים",
   "business_title": "מתנות שהעובדים והלקוחות באמת אוהבים",
   "business_text": "פתרונות מתנה חכמים לארגונים — חבילות מותאמות, מיתוג אישי, חשבונית מס ושליחה מרוכזת לכל הצוות בלחיצה אחת.",
@@ -88,22 +79,19 @@
   "business_point_2": "שליחה מרוכזת של מאות שוברים",
   "business_point_3": "מנהל לקוח ייעודי וחשבונית מס",
   "business_cta": "לפרטים לעסקים",
-
   "guarantee_title": "קונים בראש שקט",
-  "guarantee_1_title": "תוקף לשנתיים",
-  "guarantee_1_text": "בלי לחץ. ממשים את השובר מתי שמתאים.",
-  "guarantee_2_title": "החלפה חינם",
-  "guarantee_2_text": "לא התאים? מחליפים לכל חוויה אחרת.",
+  "guarantee_1_title": "תוקף ל-12 חודשים",
+  "guarantee_1_text": "שנה שלמה לבחור את הרגע. תאריך התפוגה המדויק מופיע בשובר ובדוא״ל.",
+  "guarantee_2_title": "החלפה בלי תוספת",
+  "guarantee_2_text": "לא התאים? מחליפים לכל חוויה באותו מחיר בחינם. יקרה יותר — משלימים רק את ההפרש.",
   "guarantee_3_title": "תשלום מאובטח",
   "guarantee_3_text": "הצפנה מלאה וסליקה מאובטחת בתקן.",
   "guarantee_4_title": "תמיכה אנושית",
   "guarantee_4_text": "צוות ישראלי שמלווה מהרכישה ועד החוויה.",
-
   "newsletter_title": "רוצים 10% הנחה על המתנה הראשונה?",
   "newsletter_text": "השאירו מייל ותקבלו קוד קופון ורעיונות למתנות מרגשות.",
   "newsletter_placeholder": "כתובת המייל שלכם",
   "newsletter_button": "קבלו קופון",
-
   "footer_about": "VAU היא פלטפורמת מתנות החוויה המובילה בישראל. אנחנו הופכים כל מתנה לרגע של וואו.",
   "footer_explore": "ניווט",
   "footer_support": "תמיכה",
@@ -112,7 +100,6 @@
   "footer_terms": "תקנון",
   "footer_privacy": "פרטיות",
   "footer_rights": "כל הזכויות שמורות",
-
   "drawer_title": "מארז המתנה שלי",
   "order_success_title": "המארז מוכן! 🎉",
   "order_success_text": "השובר נשלח. שמרו את הקוד — המקבל יזין אותו כדי לבחור חוויה.",
@@ -121,7 +108,6 @@
   "copied": "הועתק!",
   "back_home": "חזרה לאתר",
   "continue_shopping": "המשך לגלוש",
-
   "redeem_title": "מימוש שובר",
   "redeem_intro": "הזינו את קוד השובר שקיבלתם כדי לבחור את החוויה שלכם.",
   "redeem_code_placeholder": "VAU-XXXXXX",
@@ -143,7 +129,6 @@
   "offline_banner": "אנחנו מתקשים לטעון את המלאי המעודכן — המוצגים הם לדוגמה. הרכישה עשויה לא לעבוד כרגע.",
   "club_unavailable": "לא הצלחנו לטעון את ההתקדמות שלך כרגע. נסו לרענן.",
   "bestseller_badge": "רב־מכר",
-
   "club_badge": "מועדון VAU",
   "club_title": "מועדון VAU — המתנה הרביעית ב-50% הנחה",
   "club_subtitle": "כל מתנה שאתם קונים מקרבת אתכם להטבה: כל מתנה רביעית בתוך שנה — ב-{{discount}}% הנחה.",
@@ -157,7 +142,6 @@
   "club_reward_applied": "הטבת מועדון: {{discount}}% הנחה על ההזמנה הזו 🎁",
   "club_drawer_hint": "עוד {{n}} מתנות — והמתנה הבאה ב-{{discount}}% הנחה",
   "club_saved": "חסכתם {{amount}} עם מועדון VAU",
-
   "provided_by": "מסופק על ידי",
   "partner_since": "שותף משנת {{year}}",
   "reviews_for_experience": "מה אומרים על החוויה",
@@ -169,7 +153,6 @@
   "review_body_ph": "מה אהבתם? ספרו לנו על החוויה...",
   "review_submit": "שליחת ביקורת",
   "review_thanks": "תודה על הביקורת!",
-
   "sign_in": "התחברות",
   "sign_out": "התנתקות",
   "login_title": "התחברות ל-VAU",
@@ -178,7 +161,6 @@
   "login_google": "המשך עם Google",
   "login_apple": "המשך עם Apple",
   "login_demo_note": "מצב דמו — אין צורך בסיסמה. חברו מפתחות אמיתיים ב-.env",
-
   "assistant_button": "עוזר מתנות",
   "assistant_title": "עוזר המתנות של VAU",
   "assistant_subtitle": "ספרו לי על מי שמקבל",
@@ -190,7 +172,6 @@
   "assistant_chip_1": "מתנה לזוג רומנטי",
   "assistant_chip_2": "לחבר שאוהב אדרנלין",
   "assistant_chip_3": "יום כיף מפנק",
-
   "checkout_details": "פרטי המתנה",
   "buyer_email": "האימייל שלך (לקבלת השובר)",
   "voucher_type": "סוג השובר",
@@ -205,7 +186,6 @@
   "voucher_scan": "סרקו את קוד ה-QR או הציגו את הברקוד",
   "email_sent_to": "נשלח אל",
   "redeem_recipient_email": "אימייל המקבל (לשובר שמי)",
-
   "nav_exchange": "החלפת שובר",
   "exchange_title": "החלפת שובר",
   "exchange_intro": "קיבלתם שובר? החליפו אותו לחוויה אחרת — ואם היא יקרה יותר, פשוט משלימים את ההפרש ומשדרגים.",
@@ -223,6 +203,20 @@
   "exchange_error": "ההחלפה נכשלה. נסו שוב.",
   "exchange_go_redeem": "למימוש השובר",
   "exchange_back": "בחירת חוויה אחרת",
-
-  "select": "בחירה"
+  "select": "בחירה",
+  "gift_checking": "בודקים את המתנה שלכם…",
+  "gift_closed_title": "יש לכם מתנה מ-VAU!",
+  "gift_tap_hint": "לחצו על הקופסה כדי לפתוח",
+  "gift_open_title": "מזל טוב! 🎉",
+  "gift_open_text": "השובר מוכן — בחרו את החוויה שלכם.",
+  "gift_badge": "שובר VAU",
+  "gift_value": "ערך השובר",
+  "gift_valid_until": "בתוקף עד",
+  "gift_choose_cta": "לבחירת חוויה",
+  "gift_exchange_note": "החלפה לחוויה באותו מחיר — ללא תשלום. יקרה יותר — משלימים רק את ההפרש.",
+  "gift_problem_title": "לא הצלחנו לפתוח את המתנה",
+  "gift_invalid": "השובר לא נמצא או שהקישור פגום. בדקו את הדוא״ל או פנו לתמיכה.",
+  "gift_already_used": "השובר הזה כבר מומש.",
+  "gift_expired": "תוקף השובר פג.",
+  "gift_no_code": "אין קוד שובר בקישור. פתחו את המתנה מתוך הדוא״ל."
 }

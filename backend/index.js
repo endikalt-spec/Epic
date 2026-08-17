@@ -370,7 +370,9 @@ app.post('/api/vouchers/activate', async (req, res) => {
     [row.option_ids]).then((r) => r.rows), []);
   // Monetary value the voucher can be exchanged against.
   const faceValue = Number(row.face_value) || Math.max(0, ...options.map((o) => Number(o.price)));
-  res.json({ ok: true, type: row.type, options, faceValue });
+  // expiresAt lets the gift-reveal page and the redeem screen show the exact
+  // "valid until" date instead of only stating the term in months.
+  res.json({ ok: true, type: row.type, options, faceValue, expiresAt: row.expires_at });
 });
 
 // ─────────────────────────── VOUCHER REDEEM (single-use, atomic) ───────────────────────────

@@ -127,7 +127,12 @@ const config = {
 
   // ── Fraud / anti-abuse ──
   fraud: {
-    voucherValidityDays: Number(process.env.VOUCHER_VALIDITY_DAYS || 1826), // ≥5 years (Israeli Consumer Protection Law)
+    // 12 months from purchase, set by the business owner. NOTE: Israel's
+    // Consumer Protection Law requires a gift voucher (תו קנייה) to stay valid
+    // for at least 5 years, so this shorter term needs a lawyer's sign-off; the
+    // Terms text was aligned to it. Only affects newly issued vouchers —
+    // vouchers already sold keep the expires_at stored on their row.
+    voucherValidityDays: Number(process.env.VOUCHER_VALIDITY_DAYS || 365),
     maxActivationAttemptsPerHour: Number(process.env.MAX_ACTIVATION_ATTEMPTS || 10),
   },
 };

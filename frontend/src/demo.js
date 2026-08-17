@@ -87,7 +87,9 @@ export default {
     await delay(400);
     if (!code) return Promise.reject(new Error("code required"));
     const options = catalog().slice(0, 4);
-    return { ok: true, type: "bearer", options, faceValue: Math.max(...options.map((o) => o.price)) };
+    // 12 months out, so the demo shows a realistic "valid until" date.
+    const expiresAt = new Date(Date.now() + 365 * 86400000).toISOString();
+    return { ok: true, type: "bearer", options, faceValue: Math.max(...options.map((o) => o.price)), expiresAt };
   },
   async redeemVoucher() { await delay(400); return { success: true }; },
   async exchangeVoucher({ quoteOnly, experienceId } = {}) {
