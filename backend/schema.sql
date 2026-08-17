@@ -248,3 +248,56 @@ UPDATE categories
    SET img = replace(img, 'auto=format&fit=crop&w=900&q=80',
                           'auto=format&fit=crop&crop=entropy&w=600&h=800&q=80')
  WHERE img LIKE '%auto=format&fit=crop&w=900&q=80%';
+
+-- ── Real branded photography (replaces stock) — applied to already-seeded DBs ──
+-- These point category tiles and their flagship experience cards at owned images
+-- served from the SPA (/img/*.jpg), add the "Tours of Israel" category, and
+-- realign the Jordan experience from kayaking to rafting.
+--
+-- This block runs ONLY when the catalog is already populated — i.e. on a live
+-- database where seed.sql is skipped. On a fresh, empty database it is a no-op
+-- and seed.sql (which already carries all of the below) does the full load;
+-- otherwise the two would collide on the unique category slug. Every statement
+-- is idempotent (fixed value, or insert-only-when-missing), so re-applying the
+-- schema on every deploy is safe.
+DO $migrate_photos$
+BEGIN
+  IF EXISTS (SELECT 1 FROM categories) THEN
+    -- Category tiles → owned photos.
+    UPDATE categories SET img = '/img/extreme.jpg' WHERE slug = 'extreme';
+    UPDATE categories SET img = '/img/gastro.jpg'  WHERE slug = 'gastro';
+
+    -- New "Tours of Israel" category (guided history/nature tours).
+    INSERT INTO categories (name_he, name_ru, name_en, slug, emoji, img, tint)
+    SELECT 'סיורים בישראל', 'Экскурсии по Израилю', 'Tours of Israel', 'tours', '🏛️', '/img/tours.jpg', 'from-sun-500 to-teal-600'
+     WHERE NOT EXISTS (SELECT 1 FROM categories WHERE slug = 'tours');
+
+    -- Experience cards → owned photos (matched by their Russian title).
+    UPDATE experiences SET img = '/img/extreme.jpg'     WHERE title_ru = 'Прыжок с парашютом над побережьем';
+    UPDATE experiences SET img = '/img/gastro.jpg'      WHERE title_ru = 'Ужин с личным шефом дома';
+    UPDATE experiences SET img = '/img/paragliding.jpg' WHERE title_ru = 'Параглайдинг над Кармелем';
+
+    -- The Jordan-river experience: the owned photo is a group raft, so the copy
+    -- is realigned from kayaking to rafting (matched on the old title; a no-op
+    -- once renamed).
+    UPDATE experiences
+       SET title_he = 'שיט רפטינג בנהר הירדן', title_ru = 'Рафтинг по реке Иордан', title_en = 'Rafting on the Jordan River',
+           description_he = 'שיט קבוצתי בסירת רפטינג לאורך אשדות הירדן בצפון, מתאים למשפחות ולחובבי אקשן.',
+           description_ru = 'Групповой сплав на рафте по порогам Иордана на севере — для семей и любителей экшена.',
+           description_en = 'A group raft down the Jordan rapids in the north, great for families and thrill-seekers.',
+           participants_he = 'עד 6 משתתפים', participants_ru = 'до 6 участников', emoji = '🚣'
+     WHERE title_ru = 'Сплав на каяках по Иордану';
+    UPDATE experiences SET img = '/img/rafting.jpg' WHERE title_ru = 'Рафтинг по реке Иордан';
+
+    -- Flagship experience for the new Tours category (guided tour of Old Akko).
+    INSERT INTO experiences (title_he, title_ru, title_en, description_he, description_ru, description_en, price, old_price, rating, reviews_count, duration_he, duration_ru, participants_he, participants_ru, emoji, img, tint, category_id, is_best_seller)
+    SELECT 'סיור מודרך במבצר האבירים בעכו', 'Экскурсия по крепости крестоносцев в Акко', 'Guided tour of the Crusader fortress in Akko',
+           'סיור מודרך באולמות האבירים ובמנהרות של העיר העתיקה בעכו — אתר מורשת עולמית של אונסק"ו.',
+           'Экскурсия с гидом по залам крестоносцев и подземным ходам Старого Акко — объекта Всемирного наследия ЮНЕСКО.',
+           'A guided walk through the Knights’ Halls and tunnels of Old Akko, a UNESCO World Heritage site.',
+           180, NULL, 4.8, 340, 'כשעתיים וחצי', 'около 2,5 часов', 'עד 6 משתתפים', 'до 6 участников', '🏛️', '/img/tours.jpg', 'from-sun-500 to-teal-600',
+           (SELECT id FROM categories WHERE slug = 'tours'), TRUE
+     WHERE NOT EXISTS (SELECT 1 FROM experiences WHERE title_ru = 'Экскурсия по крепости крестоносцев в Акко');
+  END IF;
+END
+$migrate_photos$;

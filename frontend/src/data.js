@@ -5,12 +5,13 @@
 // against either source.
 
 export const CATEGORIES = [
-  { id: 1, slug: "extreme",   name_he: "אקסטרים",       name_ru: "Экстрим",        emoji: "🪂", img: "https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-coral-500 to-coral-700" },
-  { id: 2, slug: "flights",   name_he: "טיסות ושמיים",   name_ru: "Полёты",         emoji: "🎈", img: "https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-teal-400 to-teal-600" },
-  { id: 3, slug: "spa",       name_he: "ספא ויופי",      name_ru: "Спа и красота",  emoji: "🧖", img: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-berry-500 to-coral-400" },
-  { id: 4, slug: "gastro",    name_he: "קולינריה",       name_ru: "Гастрономия",    emoji: "🍷", img: "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-sun-500 to-coral-600" },
-  { id: 5, slug: "romance",   name_he: "רומנטיקה",       name_ru: "Романтика",      emoji: "💕", img: "https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-coral-400 to-berry-500" },
-  { id: 6, slug: "workshops", name_he: "סדנאות",         name_ru: "Мастер-классы",  emoji: "🎨", img: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-teal-500 to-berry-600" }
+  { id: 1, slug: "extreme",   name_he: "אקסטרים",         name_ru: "Экстрим",           emoji: "🪂", img: "/img/extreme.jpg", tint: "from-coral-500 to-coral-700" },
+  { id: 2, slug: "flights",   name_he: "טיסות ושמיים",     name_ru: "Полёты",            emoji: "🎈", img: "https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-teal-400 to-teal-600" },
+  { id: 3, slug: "tours",     name_he: "סיורים בישראל",    name_ru: "Экскурсии по Израилю", emoji: "🏛️", img: "/img/tours.jpg", tint: "from-sun-500 to-teal-600" },
+  { id: 4, slug: "gastro",    name_he: "קולינריה",         name_ru: "Гастрономия",       emoji: "🍷", img: "/img/gastro.jpg", tint: "from-sun-500 to-coral-600" },
+  { id: 5, slug: "spa",       name_he: "ספא ויופי",        name_ru: "Спа и красота",     emoji: "🧖", img: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-berry-500 to-coral-400" },
+  { id: 6, slug: "romance",   name_he: "רומנטיקה",         name_ru: "Романтика",         emoji: "💕", img: "https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-coral-400 to-berry-500" },
+  { id: 7, slug: "workshops", name_he: "סדנאות",           name_ru: "Мастер-классы",     emoji: "🎨", img: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-teal-500 to-berry-600" }
 ];
 
 // Businesses / partners — each experience is provided by one of these. Keyed by
@@ -19,6 +20,7 @@ export const BUSINESSES = {
   extreme: { slug: "partner-extreme", name_he: "אדרנלין ישראל", name_ru: "Адреналин Израиль", description_he: "חברת אקסטרים מובילה עם מדריכים מוסמכים וציוד בטיחות מהשורה הראשונה.", description_ru: "Ведущая компания экстрим-впечатлений: сертифицированные инструкторы и снаряжение высшего класса.", location_he: "מרכז, צפון ודרום", location_ru: "Центр, север и юг", emoji: "🪂", since: 2011, rating: 4.9 },
   flights: { slug: "partner-flights", name_he: "שמיים פתוחים", name_ru: "Открытое небо", description_he: "טיסות בלון, מצנחי רחיפה וחוויות אוויר בהובלת טייסים ותיקים.", description_ru: "Полёты на шарах, параглайдинг и воздушные впечатления с опытными пилотами.", location_he: "עמק יזרעאל והכרמל", location_ru: "Изреельская долина и Кармель", emoji: "🎈", since: 2014, rating: 5.0 },
   spa: { slug: "partner-spa", name_he: "נווה שלווה", name_ru: "Оазис спокойствия", description_he: "רשת ספא בוטיק עם מטפלים מקצועיים, מרחבי מים חמים וטיפולים אישיים.", description_ru: "Сеть бутик-спа с профессиональными терапевтами, тёплыми бассейнами и индивидуальными процедурами.", location_he: "תל אביב, הרצליה, ים המלח", location_ru: "Тель-Авив, Герцлия, Мёртвое море", emoji: "🧖", since: 2009, rating: 4.8 },
+  tours: { slug: "partner-tours", name_he: "שבילים", name_ru: "Тропы", description_he: "מדריכים מוסמכים לסיורי היסטוריה, ארכיאולוגיה וטבע ברחבי ישראל.", description_ru: "Сертифицированные гиды для исторических, археологических и природных экскурсий по всему Израилю.", location_he: "ירושלים, עכו, הגליל והדרום", location_ru: "Иерусалим, Акко, Галилея и юг", emoji: "🏛️", since: 2012, rating: 4.9 },
   gastro: { slug: "partner-gastro", name_he: "טעמים", name_ru: "Вкусы", description_he: "שפים פרטיים, יקבי בוטיק וחוויות קולינריות בשיתוף יצרנים מקומיים.", description_ru: "Частные шефы, бутиковые винодельни и кулинарные впечатления с местными производителями.", location_he: "הגליל, השרון ותל אביב", location_ru: "Галилея, Шарон и Тель-Авив", emoji: "🍷", since: 2015, rating: 4.8 },
   romance: { slug: "partner-romance", name_he: "רגעים", name_ru: "Моменты", description_he: "חוויות זוגיות ורומנטיות: הפלגות, רכיבה ושקיעות בלתי נשכחות.", description_ru: "Романтические впечатления для пар: круизы, верховая езда и незабываемые закаты.", location_he: "חוף תל אביב והצפון", location_ru: "Побережье Тель-Авива и север", emoji: "💕", since: 2016, rating: 4.9 },
   workshops: { slug: "partner-workshops", name_he: "יוצרים", name_ru: "Мастера", description_he: "סטודיו לסדנאות יצירה עם אמנים ושפים — קדרות, סושי, אמנות ועוד.", description_ru: "Студия творческих мастер-классов с художниками и шефами — гончарство, суши, искусство и не только.", location_he: "תל אביב ויפו", location_ru: "Тель-Авив и Яффо", emoji: "🎨", since: 2018, rating: 4.9 },
@@ -27,7 +29,7 @@ export const BUSINESSES = {
 const RAW_EXPERIENCES = [
   {
     id: 1, slug: "skydiving", category: "extreme", emoji: "🪂", tint: "from-coral-500 to-coral-700",
-    img: "https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=1000&q=80",
+    img: "/img/extreme.jpg",
     title_he: "צניחה חופשית מעל החוף", title_ru: "Прыжок с парашютом над побережьем",
     description_he: "קפיצת טנדם מגובה 4,000 מטר עם נחיתה רכה מול הים. חוויה של פעם בחיים עם צלם צמוד.",
     description_ru: "Тандемный прыжок с высоты 4000 м с мягкой посадкой у моря. Впечатление на всю жизнь и личный фотограф.",
@@ -77,7 +79,7 @@ const RAW_EXPERIENCES = [
   },
   {
     id: 6, slug: "chef-dinner", category: "gastro", emoji: "👨‍🍳", tint: "from-sun-500 to-coral-600",
-    img: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1000&q=80",
+    img: "/img/gastro.jpg",
     title_he: "ארוחת שף פרטית בבית", title_ru: "Ужин с личным шефом дома",
     description_he: "שף פרטי מגיע אליכם הביתה עם תפריט טעימות אישי, יין תואם וחוויית אירוח מלאה.",
     description_ru: "Личный шеф приезжает к вам с дегустационным меню, подобранным вином и полным сервисом.",
@@ -86,14 +88,14 @@ const RAW_EXPERIENCES = [
     participants_he: "עד 6 סועדים", participants_ru: "до 6 гостей", is_best_seller: false
   },
   {
-    id: 7, slug: "kayak", category: "extreme", emoji: "🛶", tint: "from-coral-500 to-coral-700",
-    img: "https://images.unsplash.com/photo-1545579133-99bb5ab189bd?auto=format&fit=crop&w=1000&q=80",
-    title_he: "שיט קייקים בנהר הירדן", title_ru: "Сплав на каяках по Иордану",
-    description_he: "מסלול מים זורמים בין נופי הצפון, מתאים למשפחות ולחובבי אקשן קליל.",
-    description_ru: "Маршрут по бурной воде среди северных пейзажей — для семей и любителей лёгкого экшена.",
+    id: 7, slug: "rafting", category: "extreme", emoji: "🚣", tint: "from-coral-500 to-coral-700",
+    img: "/img/rafting.jpg",
+    title_he: "שיט רפטינג בנהר הירדן", title_ru: "Рафтинг по реке Иордан",
+    description_he: "שיט קבוצתי בסירת רפטינג לאורך אשדות הירדן בצפון, מתאים למשפחות ולחובבי אקשן.",
+    description_ru: "Групповой сплав на рафте по порогам Иордана на севере — для семей и любителей экшена.",
     price: 260, old_price: null, rating: 4.6, reviews_count: 730,
     duration_he: "כשעתיים", duration_ru: "около 2 часов",
-    participants_he: "לזוג", participants_ru: "для двоих", is_best_seller: false
+    participants_he: "עד 6 משתתפים", participants_ru: "до 6 участников", is_best_seller: false
   },
   {
     id: 8, slug: "pottery", category: "workshops", emoji: "🎨", tint: "from-teal-500 to-berry-600",
@@ -107,7 +109,7 @@ const RAW_EXPERIENCES = [
   },
   {
     id: 9, slug: "paragliding", category: "flights", emoji: "🪂", tint: "from-teal-400 to-teal-600",
-    img: "https://images.unsplash.com/photo-1600250395178-40fe752e5189?auto=format&fit=crop&w=1000&q=80",
+    img: "/img/paragliding.jpg",
     title_he: "מצנח רחיפה מעל הכרמל", title_ru: "Параглайдинг над Кармелем",
     description_he: "טיסת טנדם עם מדריך מוסמך מעל מצוקי הכרמל והנוף הפתוח לים התיכון.",
     description_ru: "Тандемный полёт с сертифицированным инструктором над скалами Кармеля и видом на море.",
@@ -144,6 +146,16 @@ const RAW_EXPERIENCES = [
     price: 1150, old_price: null, rating: 5.0, reviews_count: 160,
     duration_he: "כשעתיים", duration_ru: "около 2 часов",
     participants_he: "לזוג", participants_ru: "для двоих", is_best_seller: true
+  },
+  {
+    id: 13, slug: "akko-tour", category: "tours", emoji: "🏛️", tint: "from-sun-500 to-teal-600",
+    img: "/img/tours.jpg",
+    title_he: "סיור מודרך במבצר האבירים בעכו", title_ru: "Экскурсия по крепости крестоносцев в Акко",
+    description_he: "סיור מודרך באולמות האבירים ובמנהרות של העיר העתיקה בעכו — אתר מורשת עולמית של אונסק\"ו.",
+    description_ru: "Экскурсия с гидом по залам крестоносцев и подземным ходам Старого Акко — объекта Всемирного наследия ЮНЕСКО.",
+    price: 180, old_price: null, rating: 4.8, reviews_count: 340,
+    duration_he: "כשעתיים וחצי", duration_ru: "около 2,5 часов",
+    participants_he: "עד 6 משתתפים", participants_ru: "до 6 участников", is_best_seller: true
   }
 ];
 
