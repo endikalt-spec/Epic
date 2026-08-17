@@ -5,12 +5,12 @@
 // against either source.
 
 export const CATEGORIES = [
-  { id: 1, slug: "extreme",   name_he: "אקסטרים",       name_ru: "Экстрим",        emoji: "🪂", img: "https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=900&q=80", tint: "from-coral-500 to-coral-700" },
-  { id: 2, slug: "flights",   name_he: "טיסות ושמיים",   name_ru: "Полёты",         emoji: "🎈", img: "https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&w=900&q=80", tint: "from-teal-400 to-teal-600" },
-  { id: 3, slug: "spa",       name_he: "ספא ויופי",      name_ru: "Спа и красота",  emoji: "🧖", img: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=900&q=80", tint: "from-berry-500 to-coral-400" },
-  { id: 4, slug: "gastro",    name_he: "קולינריה",       name_ru: "Гастрономия",    emoji: "🍷", img: "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=900&q=80", tint: "from-sun-500 to-coral-600" },
-  { id: 5, slug: "romance",   name_he: "רומנטיקה",       name_ru: "Романтика",      emoji: "💕", img: "https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&w=900&q=80", tint: "from-coral-400 to-berry-500" },
-  { id: 6, slug: "workshops", name_he: "סדנאות",         name_ru: "Мастер-классы",  emoji: "🎨", img: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=900&q=80", tint: "from-teal-500 to-berry-600" }
+  { id: 1, slug: "extreme",   name_he: "אקסטרים",       name_ru: "Экстрим",        emoji: "🪂", img: "https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-coral-500 to-coral-700" },
+  { id: 2, slug: "flights",   name_he: "טיסות ושמיים",   name_ru: "Полёты",         emoji: "🎈", img: "https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-teal-400 to-teal-600" },
+  { id: 3, slug: "spa",       name_he: "ספא ויופי",      name_ru: "Спа и красота",  emoji: "🧖", img: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-berry-500 to-coral-400" },
+  { id: 4, slug: "gastro",    name_he: "קולינריה",       name_ru: "Гастрономия",    emoji: "🍷", img: "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-sun-500 to-coral-600" },
+  { id: 5, slug: "romance",   name_he: "רומנטיקה",       name_ru: "Романтика",      emoji: "💕", img: "https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-coral-400 to-berry-500" },
+  { id: 6, slug: "workshops", name_he: "סדנאות",         name_ru: "Мастер-классы",  emoji: "🎨", img: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80", tint: "from-teal-500 to-berry-600" }
 ];
 
 // Businesses / partners — each experience is provided by one of these. Keyed by

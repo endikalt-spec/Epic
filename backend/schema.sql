@@ -235,3 +235,16 @@ CREATE TABLE IF NOT EXISTS admin_recovery (
     used BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ── Category tile artwork: portrait crop with a different focal region ──
+-- Five category tiles share their source photo with an experience card, so the
+-- same picture appeared twice on the home page. Tiles are 3:4, so ask the CDN
+-- for that crop directly and let it pick the busiest region (crop=entropy)
+-- instead of the centre the cards use — same photo, visibly different frame.
+-- The seed only loads into an empty catalog, so existing databases need this.
+-- One-time normalization: matches only the original landscape parameters, so
+-- re-running it is a no-op.
+UPDATE categories
+   SET img = replace(img, 'auto=format&fit=crop&w=900&q=80',
+                          'auto=format&fit=crop&crop=entropy&w=600&h=800&q=80')
+ WHERE img LIKE '%auto=format&fit=crop&w=900&q=80%';

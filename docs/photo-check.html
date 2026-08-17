@@ -7,47 +7,106 @@
   body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
   .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 80px}
   h1{font-size:clamp(24px,4vw,34px);font-weight:850;letter-spacing:-.02em;margin:0 0 6px;text-wrap:balance}
-  .sub{color:var(--soft);margin:0 0 26px;max-width:70ch}
-  h2{font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);margin:38px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+  .sub{color:var(--soft);margin:0 0 22px;max-width:70ch}
+  h2{font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);margin:40px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 10px 26px -18px rgba(0,0,0,.3)}
-  .ph{position:relative;aspect-ratio:16/10;background:linear-gradient(135deg,#ffb59f,#ed3a1c);overflow:hidden}
+  .ph{position:relative;background:linear-gradient(135deg,#ffb59f,#ed3a1c);overflow:hidden}
+  .p34{aspect-ratio:3/4}.p1610{aspect-ratio:16/10}
   .ph img{width:100%;height:100%;object-fit:cover;display:block}
   .ph.fail::after{content:"фото не загрузилось";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;background:rgba(0,0,0,.35)}
   .meta{padding:14px 16px 16px;position:relative}
   .num{position:absolute;top:-26px;right:12px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:2px 8px;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
   h3{margin:0 0 2px;font-size:16px;font-weight:750;letter-spacing:-.01em}
-  .he{font-size:14px;color:var(--soft);margin-bottom:2px}
+  .he{font-size:14px;color:var(--soft)}
   .en{font-size:12px;color:var(--soft);opacity:.75;font-style:italic}
   .meta p{font-size:13px;color:var(--soft);margin:8px 0 0}
   .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
   .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--bg);border:1px solid var(--line);color:var(--soft)}
   .tag.price{color:var(--coral);border-color:color-mix(in srgb,var(--coral) 35%,transparent)}
-  .warn{background:color-mix(in srgb,var(--sun) 16%,transparent);border:1px solid color-mix(in srgb,var(--sun) 45%,transparent);border-radius:14px;padding:14px 16px;margin-bottom:8px}
-  .warn h3{font-size:14px;margin-bottom:8px;color:var(--ink)}
-  .warn ul{margin:0;padding-inline-start:20px;font-size:13px;color:var(--soft)}
-  .warn li{margin:5px 0}
-  .warn code{font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
   .how{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:13.5px;color:var(--soft)}
   .how b{color:var(--ink)}
+  .pair{display:grid;grid-template-columns:3fr 4fr;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:16px;align-items:start}
+  @media(max-width:560px){.pair{grid-template-columns:1fr}}
+  .pair .side{min-width:0}
+  .pair .lbl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--soft);margin-bottom:6px}
+  .pair .ph{border-radius:10px}
+  .pair .nm{font-size:13.5px;font-weight:700;margin-top:8px}
+  .pairhead{font-size:12px;color:var(--soft);margin:0 0 10px;font-family:ui-monospace,Menlo,monospace}
 </style>
 <div class="wrap">
   <h1>Проверка фотографий каталога</h1>
-  <p class="sub">Каждое фото рядом с названием и описанием услуги — так видно, соответствует ли картинка тому, что продаётся. Пролистайте и отметьте, где картинка не по теме.</p>
+  <p class="sub">Каждое фото рядом с названием и описанием услуги — так видно, соответствует ли картинка тому, что продаётся. Пролистайте и скажите, где картинка не по теме.</p>
+  <div class="how"><b>Как смотреть:</b> сравните фото с названием и описанием. Ищите: не тот вид активности, явно не Израиль, студийный сток вместо реальной сцены.</div>
 
-  <div class="how"><b>Как смотреть:</b> сравните фото с названием и описанием. Ищите: не тот вид активности, явно не Израиль, студийный сток вместо реальной сцены, повторы одного фото в разных карточках.</div>
-
-  <h2>⚠️ Найдено: одно фото используется дважды (5)</h2>
-  <div class="warn">
-    <h3>Эти фото повторяются — на главной один и тот же снимок видно в плитке категории и в карточке впечатления:</h3>
-    <ul><li><code>photo-1521673461164-de300ebcfb17</code><br>категория: Экстрим &nbsp;·&nbsp; впечатление: Прыжок с парашютом над побережьем</li><li><code>photo-1507608443039-bfde4fbcd142</code><br>категория: Полёты &nbsp;·&nbsp; впечатление: Полёт на воздушном шаре на рассвете</li><li><code>photo-1544161515-4ab6ce6db874</code><br>категория: Спа и красота &nbsp;·&nbsp; впечатление: День роскошного спа для двоих</li><li><code>photo-1510812431401-41d2bd2722f3</code><br>категория: Гастрономия &nbsp;·&nbsp; впечатление: Дегустация вин на бутиковой винодельне</li><li><code>photo-1565193566173-7a0ee3dbe261</code><br>категория: Мастер-классы &nbsp;·&nbsp; впечатление: Мастер-класс гончарного дела</li></ul>
+  <h2>Плитка категории vs карточка впечатления — один снимок, разные кадры (5)</h2>
+  <p class="pairhead">плитка: fit=crop&amp;crop=entropy&amp;w=600&amp;h=800 (вертикально, «насыщенная» область) · карточка: w=1000 (центр)</p>
+  
+  <div class="pair">
+    <div class="side">
+      <div class="lbl">Плитка категории</div>
+      <div class="ph p34"><img src="https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Экстрим</div>
+    </div>
+    <div class="side">
+      <div class="lbl">Карточка впечатления</div>
+      <div class="ph p1610"><img src="https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Прыжок с парашютом над побережьем</div>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="side">
+      <div class="lbl">Плитка категории</div>
+      <div class="ph p34"><img src="https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Полёты</div>
+    </div>
+    <div class="side">
+      <div class="lbl">Карточка впечатления</div>
+      <div class="ph p1610"><img src="https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Полёт на воздушном шаре на рассвете</div>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="side">
+      <div class="lbl">Плитка категории</div>
+      <div class="ph p34"><img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Спа и красота</div>
+    </div>
+    <div class="side">
+      <div class="lbl">Карточка впечатления</div>
+      <div class="ph p1610"><img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">День роскошного спа для двоих</div>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="side">
+      <div class="lbl">Плитка категории</div>
+      <div class="ph p34"><img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Гастрономия</div>
+    </div>
+    <div class="side">
+      <div class="lbl">Карточка впечатления</div>
+      <div class="ph p1610"><img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Дегустация вин на бутиковой винодельне</div>
+    </div>
+  </div>
+  <div class="pair">
+    <div class="side">
+      <div class="lbl">Плитка категории</div>
+      <div class="ph p34"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Мастер-классы</div>
+    </div>
+    <div class="side">
+      <div class="lbl">Карточка впечатления</div>
+      <div class="ph p1610"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
+      <div class="nm">Мастер-класс гончарного дела</div>
+    </div>
   </div>
 
-  <h2>Категории (6)</h2>
+  <h2>Категории (6) — как на сайте, 3:4</h2>
   <div class="grid">
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=900&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p34"><img src="https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">1</div>
       <h3>Экстрим</h3>
@@ -58,8 +117,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&w=900&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p34"><img src="https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">2</div>
       <h3>Полёты</h3>
@@ -70,8 +128,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=900&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p34"><img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">3</div>
       <h3>Спа и красота</h3>
@@ -82,8 +139,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=900&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p34"><img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">4</div>
       <h3>Гастрономия</h3>
@@ -94,8 +150,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&w=900&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p34"><img src="https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">5</div>
       <h3>Романтика</h3>
@@ -106,8 +161,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=900&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p34"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">6</div>
       <h3>Мастер-классы</h3>
@@ -121,8 +175,7 @@
   <h2>Впечатления (12)</h2>
   <div class="grid">
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">1</div>
       <h3>Прыжок с парашютом над побережьем</h3>
@@ -133,8 +186,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">2</div>
       <h3>Полёт на воздушном шаре на рассвете</h3>
@@ -145,8 +197,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">3</div>
       <h3>День роскошного спа для двоих</h3>
@@ -157,8 +208,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">4</div>
       <h3>Дегустация вин на бутиковой винодельне</h3>
@@ -169,8 +219,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">5</div>
       <h3>Гонка на спорткаре по трассе</h3>
@@ -181,8 +230,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">6</div>
       <h3>Ужин с личным шефом дома</h3>
@@ -193,8 +241,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1545579133-99bb5ab189bd?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1545579133-99bb5ab189bd?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">7</div>
       <h3>Сплав на каяках по Иордану</h3>
@@ -205,8 +252,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">8</div>
       <h3>Мастер-класс гончарного дела</h3>
@@ -217,8 +263,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1600250395178-40fe752e5189?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1600250395178-40fe752e5189?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">9</div>
       <h3>Параглайдинг над Кармелем</h3>
@@ -229,8 +274,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">10</div>
       <h3>Мастер-класс суши с японским шефом</h3>
@@ -241,8 +285,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1553284965-83fd3e82fa5a?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">11</div>
       <h3>Конная прогулка на закате</h3>
@@ -253,8 +296,7 @@
     </div>
   </article>
   <article class="card">
-    <div class="ph"><img src="https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy"
-      onerror="this.parentElement.classList.add('fail')"></div>
+    <div class="ph p1610"><img src="https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?auto=format&fit=crop&w=1000&q=80" alt="" loading="lazy" onerror="this.parentElement.classList.add('fail')"></div>
     <div class="meta">
       <div class="num">12</div>
       <h3>Частная яхта на закате</h3>

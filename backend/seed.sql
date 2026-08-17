@@ -1,12 +1,12 @@
 -- VAU seed data — Israeli experience-gift marketplace (Hebrew default, Russian second)
 
 INSERT INTO categories (name_he, name_ru, name_en, slug, emoji, img, tint) VALUES
-('אקסטרים', 'Экстрим', 'Extreme', 'extreme', '🪂', 'https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=900&q=80', 'from-coral-500 to-coral-700'),
-('טיסות ושמיים', 'Полёты', 'Flights', 'flights', '🎈', 'https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&w=900&q=80', 'from-teal-400 to-teal-600'),
-('ספא ויופי', 'Спа и красота', 'Spa & Beauty', 'spa', '🧖', 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=900&q=80', 'from-berry-500 to-coral-400'),
-('קולינריה', 'Гастрономия', 'Gastronomy', 'gastro', '🍷', 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=900&q=80', 'from-sun-500 to-coral-600'),
-('רומנטיקה', 'Романтика', 'Romance', 'romance', '💕', 'https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&w=900&q=80', 'from-coral-400 to-berry-500'),
-('סדנאות', 'Мастер-классы', 'Workshops', 'workshops', '🎨', 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=900&q=80', 'from-teal-500 to-berry-600');
+('אקסטרים', 'Экстрим', 'Extreme', 'extreme', '🪂', 'https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80', 'from-coral-500 to-coral-700'),
+('טיסות ושמיים', 'Полёты', 'Flights', 'flights', '🎈', 'https://images.unsplash.com/photo-1507608443039-bfde4fbcd142?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80', 'from-teal-400 to-teal-600'),
+('ספא ויופי', 'Спа и красота', 'Spa & Beauty', 'spa', '🧖', 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80', 'from-berry-500 to-coral-400'),
+('קולינריה', 'Гастрономия', 'Gastronomy', 'gastro', '🍷', 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80', 'from-sun-500 to-coral-600'),
+('רומנטיקה', 'Романтика', 'Romance', 'romance', '💕', 'https://images.unsplash.com/photo-1518621736915-f3b1c41bfd00?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80', 'from-coral-400 to-berry-500'),
+('סדנאות', 'Мастер-классы', 'Workshops', 'workshops', '🎨', 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&crop=entropy&w=600&h=800&q=80', 'from-teal-500 to-berry-600');
 
 INSERT INTO experiences (title_he, title_ru, title_en, description_he, description_ru, description_en, price, old_price, rating, reviews_count, duration_he, duration_ru, participants_he, participants_ru, emoji, img, tint, category_id, is_best_seller) VALUES
 ('צניחה חופשית מעל החוף', 'Прыжок с парашютом над побережьем', 'Skydiving over the coast', 'קפיצת טנדם מגובה 4,000 מטר עם נחיתה רכה מול הים.', 'Тандемный прыжок с высоты 4000 м с мягкой посадкой у моря.', 'Tandem jump from 4,000m with a soft landing by the sea.', 1290, 1490, 4.9, 850, 'כ־3 שעות', 'около 3 часов', 'יחיד', '1 человек', '🪂', 'https://images.unsplash.com/photo-1521673461164-de300ebcfb17?auto=format&fit=crop&w=1000&q=80', 'from-coral-500 to-coral-700', (SELECT id FROM categories WHERE slug='extreme'), TRUE),
