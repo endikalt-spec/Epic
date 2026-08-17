@@ -73,7 +73,7 @@ function Btn({ children, variant = "primary", size = "md", className = "", loadi
 
 function Pill({ children, className = "" }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide break-words ${className}`}>
       {children}
     </span>
   );
@@ -554,12 +554,19 @@ function Hero({ t, experiences }) {
       <div className="absolute inset-0 bg-gradient-to-b from-cream-50/75 via-cream-50/65 to-cream-50/90" aria-hidden="true" />
       <div className="absolute -top-24 -start-24 w-96 h-96 rounded-full bg-coral-300/30 blur-3xl pointer-events-none" />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center relative">
-        <div className="animate-rise text-center lg:text-start">
+        {/* min-w-0 removes the grid item's automatic minimum size. Without it the
+            single auto track is pinned to the content's min-content width (the
+            search row), so the hero stayed ~381px wide on any phone and the
+            section's overflow-hidden clipped the headline, badge and button. */}
+        <div className="animate-rise text-center lg:text-start min-w-0">
           <img src={LOGO_FULL} alt="VAU — the gift that lasts a lifetime" className="h-28 sm:h-32 w-auto mx-auto lg:mx-0 mb-6" />
           <Pill className="bg-white text-coral-600 shadow-soft mb-6">
             <Sparkles size={13} /> {t("hero_badge")}
           </Pill>
-          <h1 className="font-display font-extrabold leading-[0.95] tracking-tight text-5xl sm:text-6xl xl:text-7xl text-ink-900 text-balance">
+          {/* Russian compounds ("впечатлений.") are wider than a 320px screen at
+              text-5xl, so the smallest phones get one step down; 380px and up keep
+              the designed scale. break-words is the last-resort safety net. */}
+          <h1 className="font-display font-extrabold leading-[0.95] tracking-tight text-4xl min-[380px]:text-5xl sm:text-6xl xl:text-7xl text-ink-900 text-balance break-words">
             <span className="block">{t("hero_title_1")}</span>
             <span className="block text-coral-500">{t("hero_title_2")}</span>
             <span className="block">{t("hero_title_3")}</span>
@@ -638,8 +645,11 @@ function StatsStrip({ t }) {
     <section className="bg-ink-900 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
         {stats.map(([val, key], i) => (
-          <div key={i} className="text-center md:text-start">
-            <div className="font-display text-3xl sm:text-4xl font-extrabold text-coral-400">
+          <div key={i} className="text-center md:text-start min-w-0">
+            {/* Values are mostly short numbers, but one is a word ("Мгновенно" /
+                "מיידי"). break-words keeps any translation inside its column, and
+                the size steps down at md where 4 columns leave only ~160px. */}
+            <div className="font-display text-3xl lg:text-4xl font-extrabold text-coral-400 break-words">
               {val ?? t("stat_delivery_val")}
             </div>
             <div className="text-sm font-medium text-cream-300 mt-1">{t(key)}</div>
@@ -672,7 +682,7 @@ function CategorySection({ t, categories, loc, setActiveCat }) {
             <div className="absolute inset-0 bg-gradient-to-t from-ink-900/80 via-ink-900/10 to-transparent" />
             <div className="absolute bottom-0 inset-x-0 p-4 text-white text-start">
               <div className="text-2xl mb-1">{c.emoji}</div>
-              <div className="font-display font-bold text-lg leading-tight">{loc(c, "name")}</div>
+              <div className="font-display font-bold text-lg leading-tight break-words">{loc(c, "name")}</div>
             </div>
           </button>
         ))}
@@ -805,8 +815,10 @@ function ExperienceCard({ exp, t, loc, openModal, add, added, boxFull }) {
           {loc(exp, "participants") && <span className="inline-flex items-center gap-1"><Users size={14} className="text-teal-500" />{loc(exp, "participants")}</span>}
           <Stars rating={exp.rating} count={exp.reviews_count} className="ms-auto" />
         </div>
-        <div className="mt-auto flex items-center justify-between gap-3">
-          <div>
+        {/* flex-wrap: on ~320px screens the price and the CTA together exceed the
+            card width, and the card's overflow-hidden would clip the button. */}
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="text-[11px] font-bold text-ink-400">{t("card_from")}</div>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-2xl font-extrabold text-coral-600">{nis(exp.price)}</span>
@@ -1088,13 +1100,16 @@ function Guarantees({ t }) {
     <section className="mx-auto max-w-7xl px-4 sm:px-6 py-16">
       <SectionHead title={t("guarantee_title")} center />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* At 320px a 2-column cell is ~132px wide, so the inner px-4 left only
+            ~100px for text and Russian words spilled out. Drop it on the
+            narrowest screens and let long words break. */}
         {items.map(([Icon, k, color]) => (
-          <div key={k} className="text-center px-4">
+          <div key={k} className="text-center px-0 sm:px-4 min-w-0">
             <div className={`inline-grid place-items-center h-16 w-16 rounded-2xl bg-cream-100 mb-4 ${color}`}>
               <Icon size={28} />
             </div>
-            <h3 className="font-display text-lg font-bold text-ink-900 mb-1">{t(`${k}_title`)}</h3>
-            <p className="text-sm text-ink-500 leading-relaxed">{t(`${k}_text`)}</p>
+            <h3 className="font-display text-lg font-bold text-ink-900 mb-1 break-words">{t(`${k}_title`)}</h3>
+            <p className="text-sm text-ink-500 leading-relaxed break-words">{t(`${k}_text`)}</p>
           </div>
         ))}
       </div>
@@ -1471,8 +1486,10 @@ function ExperienceModal({ exp, close, t, loc, add, added, boxFull, user }) {
             </div>
           )}
         </div>
-        <div className="border-t border-cream-200 bg-white p-5 flex items-center justify-between gap-4 shrink-0">
-          <div>
+        {/* flex-wrap so the price and the CTA drop onto separate rows instead of
+            overflowing (and being clipped) on very narrow phones (~320px). */}
+        <div className="border-t border-cream-200 bg-white p-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="min-w-0">
             <div className="text-xs font-bold text-ink-400">{t("card_from")}</div>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-3xl font-extrabold text-coral-600">{nis(exp.price)}</span>

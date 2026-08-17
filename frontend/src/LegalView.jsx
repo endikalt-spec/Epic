@@ -26,7 +26,9 @@ export default function LegalView({ doc, setDoc, goHome, lang, t, rtl }) {
           <div className="mb-6">
             <img src={LOGO_WORDMARK} alt="VAU" className="h-9 w-auto" />
           </div>
-          <h1 className="font-display text-4xl font-extrabold tracking-tight text-ink-900">{d.title}</h1>
+          {/* Long single words ("Пользовательское", "конфиденциальности") overflow a
+              narrow column at text-4xl, so step the size down and allow breaking. */}
+          <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight text-ink-900 break-words">{d.title}</h1>
           <p className="text-ink-500 mt-2">{fill(d.updated)}</p>
 
           <div className="flex gap-2 mt-6">
@@ -59,7 +61,7 @@ export default function LegalView({ doc, setDoc, goHome, lang, t, rtl }) {
               <h2 className="font-display text-xl font-bold text-ink-900 mb-2">{s.h}</h2>
               <div className="space-y-2">
                 {s.p.map((para, j) => (
-                  <p key={j} className="text-ink-600 leading-relaxed">{fill(para)}</p>
+                  <p key={j} className="text-ink-600 leading-relaxed break-words">{fill(para)}</p>
                 ))}
               </div>
             </section>
