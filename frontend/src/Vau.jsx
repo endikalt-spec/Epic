@@ -1,0 +1,1837 @@
+import { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { useStore } from "./StoreContext";
+import { CATEGORIES as FALLBACK_CATS, EXPERIENCES as FALLBACK_EXPS } from "./data";
+import {
+  Gift, Search, Star, Check, X, Trash2, ArrowLeft, ArrowRight, Clock, Users,
+  ShieldCheck, RefreshCw, Headphones, CalendarClock, Sparkles, Loader2,
+  ChevronLeft, Menu, Copy, Ticket, Building2, PartyPopper, Plus,
+  LogIn, CreditCard, Smartphone
+} from "lucide-react";
+import axios from "axios";
+import LoginModal from "./LoginModal";
+import AiAssistant from "./AiAssistant";
+import LegalView from "./LegalView";
+import GiftReveal from "./GiftReveal";
+import AdminPanel from "./AdminPanel";
+import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
+import { useFocusTrap } from "./useFocusTrap";
+import Turnstile from "./Turnstile";
+import { TURNSTILE_ON } from "./turnstileEnv";
+import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
+import i18n from "./i18n";
+const fmtLocale = () => (i18n.language === "ru" ? "ru-RU" : "he-IL");
+const nis = (n) => `₪${Number(n).toLocaleString(fmtLocale())}`;
+// Wide thematic Unsplash photo for section backgrounds. IDs are reused from the
+// catalog so they're known-valid. Layered UNDER a color/overlay, so if the image
+// is blocked (e.g. the sandboxed demo) the section still looks right.
+const scene = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1600&q=70`;
+
+// ── Lightweight URL routing for internal views (no server rewrites needed) ──
+// Maps the current view to a ?v= query param so back/forward and bookmarks work,
+// while leaving #anchor scroll links and the ?code= redeem deep-link intact.
+function viewFromLocation() {
+  const p = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const v = p.get("v");
+  // The gift-reveal link from the e-voucher email also carries ?code=, so it has
+  // to be matched before the redeem branch below.
+  if (v === "gift") return { view: "gift" };
+  if (v === "redeem" || p.has("code")) return { view: "redeem" };
+  if (v === "exchange") return { view: "exchange" };
+  if (v === "terms") return { view: "legal", doc: "terms" };
+  if (v === "privacy") return { view: "legal", doc: "privacy" };
+  if (v === "admin" || p.has("admin")) return { view: "admin" };
+  return { view: "home" };
+}
+function urlForView(view, doc) {
+  const base = window.location.pathname;
+  if (view === "home") return base;
+  const key = view === "legal" ? (doc || "terms") : view;
+  return `${base}?v=${key}`;
+}
+
+/* ─────────────────────────── UI PRIMITIVES ─────────────────────────── */
+
+function Btn({ children, variant = "primary", size = "md", className = "", loading, ...props }) {
+  const variants = {
+    primary: "bg-coral-500 text-white hover:bg-coral-600 glow-coral hover:-translate-y-0.5",
+    dark: "bg-ink-900 text-white hover:bg-ink-800 hover:-translate-y-0.5",
+    soft: "bg-coral-50 text-coral-700 hover:bg-coral-100",
+    ghost: "bg-transparent text-ink-700 border border-cream-300 hover:border-coral-300 hover:text-coral-600",
+    white: "bg-white text-ink-900 hover:bg-cream-100 shadow-soft",
+  };
+  const sizes = {
+    sm: "px-4 py-2 text-xs",
+    md: "px-6 py-3 text-sm",
+    lg: "px-8 py-4 text-base",
+  };
+  return (
+    <button
+      className={`inline-flex items-center justify-center gap-2 rounded-full font-bold transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}
+      disabled={loading || props.disabled}
+      {...props}
+    >
+      {loading && <Loader2 size={16} className="animate-spin" />}
+      {children}
+    </button>
+  );
+}
+
+function Pill({ children, className = "" }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide break-words ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function Stars({ rating, count, className = "" }) {
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold text-ink-600 ${className}`}>
+      <Star size={13} className="text-sun-500" fill="currentColor" />
+      {rating}
+      {count != null && <span className="text-ink-400 font-medium">({count})</span>}
+    </span>
+  );
+}
+
+// Image with skeleton loader + graceful gradient/emoji fallback on error.
+function SmartImg({ src, alt, emoji, tint = "from-coral-400 to-coral-600", className = "", imgClass = "" }) {
+  const [status, setStatus] = useState("loading"); // loading | ok | error
+  // Safety net: if an image neither loads nor errors within a few seconds
+  // (slow network / blocked host), fall back to the branded gradient so a
+  // card is never left blank.
+  useEffect(() => {
+    if (status !== "loading") return;
+    const id = setTimeout(() => setStatus((s) => (s === "loading" ? "error" : s)), 6000);
+    return () => clearTimeout(id);
+  }, [status]);
+  return (
+    <div className={`relative overflow-hidden ${className}`}>
+      {status === "loading" && <div className="absolute inset-0 skeleton" />}
+      {status === "error" ? (
+        <div className={`absolute inset-0 bg-gradient-to-br ${tint} flex items-center justify-center`}>
+          <span className="text-6xl drop-shadow-lg">{emoji}</span>
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          onLoad={() => setStatus("ok")}
+          onError={() => setStatus("error")}
+          className={`h-full w-full object-cover transition-all duration-700 ${status === "ok" ? "opacity-100" : "opacity-0"} ${imgClass}`}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────── MAIN APP ─────────────────────────── */
+
+export default function Vau() {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language?.startsWith("ru") ? "ru" : "he";
+  const rtl = lang === "he";
+  const { giftBox, addToGiftBox, removeFromGiftBox, clearGiftBox } = useStore();
+
+  const [experiences, setExperiences] = useState(() => (DEMO ? FALLBACK_EXPS : []));
+  const [categories, setCategories] = useState(() => (DEMO ? FALLBACK_CATS : []));
+  const [loading, setLoading] = useState(() => !DEMO);
+  const [activeCat, setActiveCat] = useState("all");
+  const [scrolled, setScrolled] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [modalExp, setModalExp] = useState(null);
+  const [view, setView] = useState(() => viewFromLocation().view); // home | redeem | exchange | legal | admin
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [orderCode, setOrderCode] = useState(null);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [voucher, setVoucher] = useState(null);
+  const [user, setUser] = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [legalDoc, setLegalDoc] = useState(() => viewFromLocation().doc || "terms");
+  const [loyalty, setLoyalty] = useState(null);
+  const [lastPayment, setLastPayment] = useState(null);
+  const [usingFallback, setUsingFallback] = useState(false);
+
+  const refreshLoyalty = () => {
+    if (!localStorage.getItem("vau_token")) { setLoyalty(null); return; }
+    getLoyalty().then(setLoyalty).catch(() => setLoyalty(null));
+  };
+
+  const loc = (obj, field) => obj?.[`${field}_${lang}`] ?? obj?.[`${field}_he`] ?? "";
+
+  useEffect(() => {
+    let alive = true;
+    // Demo build has no server — the bundled catalog is used via lazy state init.
+    if (DEMO) return () => { alive = false; };
+    (async () => {
+      setLoading(true);
+      try {
+        const [expRes, catRes] = await Promise.all([
+          axios.get(`${API_URL}/experiences`, { timeout: 4000 }),
+          axios.get(`${API_URL}/categories`, { timeout: 4000 }),
+        ]);
+        if (!alive) return;
+        const liveExps = Array.isArray(expRes.data) && expRes.data.length;
+        setExperiences(liveExps ? expRes.data : FALLBACK_EXPS);
+        setCategories(Array.isArray(catRes.data) && catRes.data.length ? catRes.data : FALLBACK_CATS);
+        setUsingFallback(!liveExps); // API reachable but empty → still not live inventory
+      } catch {
+        if (!alive) return;
+        setExperiences(FALLBACK_EXPS);
+        setCategories(FALLBACK_CATS);
+        setUsingFallback(true);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    const h = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", h);
+    return () => window.removeEventListener("scroll", h);
+  }, []);
+
+  // Restore session: pick up a token from the OAuth redirect (?token=...) or storage.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken) {
+      localStorage.setItem("vau_token", urlToken);
+      params.delete("token");
+      const qs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+    }
+    if (localStorage.getItem("vau_token")) {
+      getMe().then((d) => setUser(d.user)).catch(() => {});
+    }
+  }, []);
+
+  // Load VAU Club loyalty status whenever the signed-in user changes. Only calls
+  // setState from the async callback (logout clearing is handled in signOut).
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    getLoyalty().then((d) => { if (alive) setLoyalty(d); }).catch(() => { if (alive) setLoyalty(null); });
+    return () => { alive = false; };
+  }, [user]);
+
+  const signOut = () => { localStorage.removeItem("vau_token"); setUser(null); setLoyalty(null); };
+
+  // Lock body scroll when any overlay is open (including the login modal).
+  useEffect(() => {
+    const open = drawerOpen || modalExp || menuOpen || loginOpen;
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [drawerOpen, modalExp, menuOpen, loginOpen]);
+
+  // Escape closes the topmost open overlay (keyboard dismissal).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (modalExp) setModalExp(null);
+      else if (drawerOpen) setDrawerOpen(false);
+      else if (loginOpen) setLoginOpen(false);
+      else if (menuOpen) setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [modalExp, drawerOpen, loginOpen, menuOpen]);
+
+  const catSlug = (e) => e.category ?? e.category_slug ?? null;
+  const filtered = useMemo(() => {
+    if (activeCat === "all") return experiences;
+    // API rows may not carry a slug; fall back to matching category_id via categories list
+    return experiences.filter((e) => {
+      if (catSlug(e)) return catSlug(e) === activeCat;
+      const cat = categories.find((c) => c.slug === activeCat);
+      return cat && e.category_id === cat.id;
+    });
+  }, [experiences, activeCat, categories]);
+
+  const inBox = (id) => giftBox.some((i) => i.id === id);
+  const boxFull = giftBox.length >= 5;
+
+  const handleCheckout = async (form) => {
+    if (!giftBox.length) return;
+    setCheckoutLoading(true);
+    setCheckoutError("");
+    try {
+      const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
+      const res = await apiCheckout({
+        experienceIds: giftBox.map((e) => e.id),
+        amount: total,
+        method: form.method,
+        buyerEmail: form.buyerEmail,
+        buyerName: form.buyerName || undefined,
+        voucherType: form.voucherType,
+        recipient:
+          form.voucherType === "personalized"
+            ? { name: form.recipientName, email: form.recipientEmail }
+            : form.recipientEmail
+            ? { email: form.recipientEmail }
+            : null,
+        cardLast4: form.cardLast4 || undefined,
+        acceptTerms: form.acceptTerms,
+        marketingOptIn: form.marketingOptIn,
+        turnstileToken: form.turnstileToken,
+        locale: i18n.language,
+      });
+      // Only surface a voucher the server actually issued; only then clear the cart.
+      setOrderCode(res.code);
+      setVoucher(res.voucher);
+      setLastPayment(res.payment || null);
+      clearGiftBox();
+      refreshLoyalty();
+    } catch (err) {
+      // Surface a specific reason where the server gives one (decline, terms,
+      // rate limit, persist-after-charge) instead of one generic message.
+      const status = err?.response?.status;
+      const reason = err?.response?.data?.error;
+      const ref = err?.response?.data?.paymentRef;
+      let msg = t("checkout_error");
+      if (reason === "terms_not_accepted") msg = t("checkout_error_terms");
+      else if (status === 402 || reason === "Payment not completed") msg = t("checkout_error_declined");
+      else if (status === 429) msg = t("checkout_error_ratelimit");
+      else if (reason === "voucher_persist_failed") msg = t("checkout_error_persist", { ref: ref || "" });
+      setCheckoutError(msg);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Navigate between internal views and push a matching URL (back/forward work).
+  const navigate = (v, doc) => {
+    if (doc) setLegalDoc(doc);
+    setView(v); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0);
+    try { window.history.pushState({ v, doc }, "", urlForView(v, doc)); } catch { /* ignore */ }
+  };
+  const goRedeem = () => navigate("redeem");
+  const goExchange = () => navigate("exchange");
+  const goLegal = (docType) => navigate("legal", docType);
+  const goAdmin = () => navigate("admin");
+  const goHome = () => navigate("home");
+  // From the gift-reveal page into redeem: keep code/token/signature in the URL
+  // so a reload still lands on a working redeem screen.
+  const goRedeemWithCode = (voucherCode) => {
+    const cur = new URLSearchParams(window.location.search);
+    const next = new URLSearchParams({ v: "redeem" });
+    if (voucherCode) next.set("code", voucherCode);
+    if (cur.get("t")) next.set("t", cur.get("t"));
+    if (cur.get("s")) next.set("s", cur.get("s"));
+    setView("redeem"); setDrawerOpen(false); setMenuOpen(false); window.scrollTo(0, 0);
+    try { window.history.pushState({ v: "redeem" }, "", `${window.location.pathname}?${next}`); } catch { /* ignore */ }
+  };
+  const changeLang = (l) => i18n.changeLanguage(l);
+
+  // Sync view with browser back/forward.
+  useEffect(() => {
+    const onPop = () => {
+      const { view: v, doc } = viewFromLocation();
+      if (doc) setLegalDoc(doc);
+      setView(v); window.scrollTo(0, 0);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  if (view === "admin") {
+    return <AdminPanel lang={lang} goHome={goHome} />;
+  }
+  if (view === "gift") {
+    return <GiftReveal t={t} rtl={rtl} goHome={goHome} goRedeemWithCode={goRedeemWithCode} />;
+  }
+  if (view === "redeem") {
+    return <RedeemView goHome={goHome} loc={loc} t={t} rtl={rtl} />;
+  }
+  if (view === "exchange") {
+    return <ExchangeView goHome={goHome} goRedeem={goRedeem} experiences={experiences.length ? experiences : FALLBACK_EXPS} loc={loc} t={t} rtl={rtl} />;
+  }
+  if (view === "legal") {
+    return <LegalView doc={legalDoc} setDoc={setLegalDoc} goHome={goHome} lang={lang} t={t} rtl={rtl} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-cream-50 text-ink-900 overflow-x-hidden">
+      <Header
+        {...{ t, lang, scrolled,
+          giftCount: giftBox.length, openDrawer: () => setDrawerOpen(true),
+          goRedeem, goExchange, changeLang, menuOpen, setMenuOpen,
+          user, onSignIn: () => setLoginOpen(true), onSignOut: signOut }}
+      />
+
+      {usingFallback && !DEMO && (
+        <div className="bg-sun-400/20 border-b border-sun-400/40 text-ink-700 text-sm text-center px-4 py-2.5 mt-16">
+          {t("offline_banner")}
+        </div>
+      )}
+
+      <Hero {...{ t, rtl, experiences }} />
+
+      <StatsStrip t={t} />
+
+      <CategorySection {...{ t, categories, loc, setActiveCat }} />
+
+      <HowItWorks t={t} />
+
+      <Catalog
+        {...{ t, loc, loading, filtered, categories, activeCat, setActiveCat,
+          openModal: setModalExp, addToGiftBox, inBox, boxFull, rtl }}
+      />
+
+      <OccasionsBar t={t} />
+
+      <LoyaltySection {...{ t, loyalty, user, onSignIn: () => setLoginOpen(true) }} />
+
+      <Reviews t={t} loc={loc} />
+
+      <BusinessBanner t={t} rtl={rtl} />
+
+      <Guarantees t={t} />
+
+      <Newsletter t={t} />
+
+      <Footer t={t} lang={lang} goRedeem={goRedeem} goLegal={goLegal} goAdmin={goAdmin} />
+
+      {/* Gift box drawer */}
+      <GiftDrawer
+        {...{ open: drawerOpen, close: () => { setDrawerOpen(false); setCheckoutError(""); }, t, loc, giftBox,
+          removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout,
+          orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal,
+          loyalty, lastPayment, setLastPayment }}
+      />
+
+      {/* Experience modal */}
+      {modalExp && (
+        <ExperienceModal
+          {...{ exp: modalExp, close: () => setModalExp(null), t, loc,
+            add: () => { addToGiftBox(modalExp); setModalExp(null); setDrawerOpen(true); },
+            added: inBox(modalExp.id), boxFull, rtl, user }}
+        />
+      )}
+
+      {/* Floating box button (mobile) */}
+      {giftBox.length > 0 && !drawerOpen && (
+        <button
+          onClick={() => setDrawerOpen(true)}
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}
+          className="fixed end-6 z-40 lg:hidden flex items-center gap-2 rounded-full bg-coral-500 text-white px-5 py-4 font-bold glow-coral animate-pop"
+        >
+          <Gift size={20} />
+          <span>{giftBox.length}</span>
+        </button>
+      )}
+
+      {/* AI gift assistant */}
+      <AiAssistant
+        {...{ experiences: experiences.length ? experiences : FALLBACK_EXPS, lang, loc, t, rtl,
+          onAdd: (e) => { addToGiftBox(e); }, inBox }}
+      />
+
+      {/* Sign in */}
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLogin={setUser} t={t} rtl={rtl} />
+    </div>
+  );
+}
+
+/* ─────────────────────────── HEADER ─────────────────────────── */
+
+function Header({ t, lang, scrolled, giftCount, openDrawer, goRedeem, goExchange, changeLang, menuOpen, setMenuOpen, user, onSignIn, onSignOut }) {
+  const menuRef = useFocusTrap(menuOpen, () => setMenuOpen(false));
+  const links = [
+    { key: "nav_experiences", href: "#catalog" },
+    { key: "nav_how", href: "#how" },
+    { key: "nav_exchange", action: goExchange },
+    { key: "nav_reviews", href: "#reviews" },
+    { key: "nav_business", href: "#business" },
+  ];
+  return (
+    <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? "bg-cream-50/90 backdrop-blur-xl shadow-soft" : "bg-transparent"}`}>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 h-18 py-3.5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-8">
+          <a href="#top" className="flex items-center select-none">
+            <img src={LOGO_WORDMARK} alt="VAU" className="h-8 sm:h-9 w-auto" />
+          </a>
+          <nav className="hidden xl:flex items-center gap-1">
+            {links.map((l) => (
+              l.action ? (
+                <button key={l.key} onClick={l.action} className="px-3 py-2 text-sm font-bold text-ink-600 hover:text-coral-600 transition-colors rounded-lg">
+                  {t(l.key)}
+                </button>
+              ) : (
+                <a key={l.key} href={l.href} className="px-3 py-2 text-sm font-bold text-ink-600 hover:text-coral-600 transition-colors rounded-lg">
+                  {t(l.key)}
+                </a>
+              )
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center rounded-full bg-white shadow-soft p-1">
+            {["he", "ru"].map((l) => (
+              <button
+                key={l}
+                onClick={() => changeLang(l)}
+                className={`px-3 py-1.5 text-xs font-extrabold rounded-full transition-all ${lang === l ? "bg-ink-900 text-white" : "text-ink-500 hover:text-ink-900"}`}
+              >
+                {l === "he" ? "עב" : "RU"}
+              </button>
+            ))}
+          </div>
+
+          <button onClick={goRedeem} className="hidden xl:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+            <Ticket size={16} /> {t("redeem_voucher")}
+          </button>
+
+          {user ? (
+            <div className="hidden xl:flex items-center gap-2">
+              <span className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold" title={user.name}>
+                {(user.name || "U").charAt(0).toUpperCase()}
+              </span>
+              <button onClick={onSignOut} className="text-xs font-bold text-ink-500 hover:text-coral-600">{t("sign_out")}</button>
+            </div>
+          ) : (
+            <button onClick={onSignIn} className="hidden xl:inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-ink-700 hover:text-coral-600 transition-colors">
+              <LogIn size={16} /> {t("sign_in")}
+            </button>
+          )}
+
+          <button onClick={openDrawer} className="relative inline-flex items-center gap-2 rounded-full bg-ink-900 text-white px-3.5 sm:px-4 py-2.5 text-sm font-bold hover:bg-ink-800 transition-colors">
+            <Gift size={17} />
+            <span className="hidden xl:inline">{t("gift_box")}</span>
+            {giftCount > 0 && (
+              <span className="grid place-items-center min-w-5 h-5 px-1 rounded-full bg-coral-500 text-white text-[11px] font-extrabold">{giftCount}</span>
+            )}
+          </button>
+
+          <button onClick={() => setMenuOpen(true)} aria-label={t("menu") || "Menu"} className="xl:hidden grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft text-ink-900">
+            <Menu size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile menu */}
+      {menuOpen && (
+        <div className="xl:hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
+          <div ref={menuRef} role="dialog" aria-modal="true" aria-label="Menu" tabIndex={-1} className="absolute top-0 inset-x-0 bg-cream-50 rounded-b-3xl p-6 shadow-pop animate-rise" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-6">
+              <img src={LOGO_WORDMARK} alt="VAU" className="h-8 w-auto" />
+              <button onClick={() => setMenuOpen(false)} className="grid place-items-center h-10 w-10 rounded-full bg-white shadow-soft"><X size={20} /></button>
+            </div>
+            <nav className="flex flex-col gap-1">
+              {links.map((l) => (
+                l.action ? (
+                  <button key={l.key} onClick={() => { setMenuOpen(false); l.action(); }} className="text-start px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
+                    {t(l.key)}
+                  </button>
+                ) : (
+                  <a key={l.key} href={l.href} onClick={() => setMenuOpen(false)} className="px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
+                    {t(l.key)}
+                  </a>
+                )
+              ))}
+              <button onClick={goRedeem} className="mt-2 flex items-center gap-2 px-3 py-3 text-lg font-bold text-coral-600">
+                <Ticket size={20} /> {t("redeem_voucher")}
+              </button>
+              <div className="mt-2 pt-3 border-t border-cream-200">
+                {user ? (
+                  <div className="flex items-center justify-between px-3">
+                    <span className="flex items-center gap-2 font-bold text-ink-800">
+                      <span className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{(user.name || "U").charAt(0).toUpperCase()}</span>
+                      {user.name}
+                    </span>
+                    <button onClick={() => { setMenuOpen(false); onSignOut(); }} className="text-sm font-bold text-ink-500 hover:text-coral-600">{t("sign_out")}</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setMenuOpen(false); onSignIn(); }} className="w-full flex items-center gap-2 px-3 py-3 text-lg font-bold text-ink-800 hover:text-coral-600 rounded-xl hover:bg-white">
+                    <LogIn size={20} /> {t("sign_in")}
+                  </button>
+                )}
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
+
+/* ─────────────────────────── HERO ─────────────────────────── */
+
+function Hero({ t, experiences }) {
+  const pics = experiences.length ? experiences : FALLBACK_EXPS;
+  const feat = pics[1] || pics[0];
+  const feat2 = pics[2] || pics[0];
+  return (
+    <section id="top" className="relative pt-28 sm:pt-32 pb-16 mesh-warm overflow-hidden">
+      {/* Faint photographic texture behind the warm mesh; a heavy cream wash keeps
+          the dark hero text readable and preserves the look if the image is blocked. */}
+      <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${scene("1600250395178-40fe752e5189")})` }} aria-hidden="true" />
+      <div className="absolute inset-0 bg-gradient-to-b from-cream-50/75 via-cream-50/65 to-cream-50/90" aria-hidden="true" />
+      <div className="absolute -top-24 -start-24 w-96 h-96 rounded-full bg-coral-300/30 blur-3xl pointer-events-none" />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 grid lg:grid-cols-2 gap-12 items-center relative">
+        {/* min-w-0 removes the grid item's automatic minimum size. Without it the
+            single auto track is pinned to the content's min-content width (the
+            search row), so the hero stayed ~381px wide on any phone and the
+            section's overflow-hidden clipped the headline, badge and button. */}
+        <div className="animate-rise text-center lg:text-start min-w-0">
+          <img src={LOGO_FULL} alt="VAU — the gift that lasts a lifetime" className="h-28 sm:h-32 w-auto mx-auto lg:mx-0 mb-6" />
+          <Pill className="bg-white text-coral-600 shadow-soft mb-6">
+            <Sparkles size={13} /> {t("hero_badge")}
+          </Pill>
+          {/* Russian compounds ("впечатлений.") are wider than a 320px screen at
+              text-5xl, so the smallest phones get one step down; 380px and up keep
+              the designed scale. break-words is the last-resort safety net. */}
+          <h1 className="font-display font-extrabold leading-[0.95] tracking-tight text-4xl min-[380px]:text-5xl sm:text-6xl xl:text-7xl text-ink-900 text-balance break-words">
+            <span className="block">{t("hero_title_1")}</span>
+            <span className="block text-coral-500">{t("hero_title_2")}</span>
+            <span className="block">{t("hero_title_3")}</span>
+          </h1>
+          <p className="mt-6 text-lg sm:text-xl text-ink-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+            {t("hero_subtitle")}
+          </p>
+
+          {/* Search */}
+          <div className="mt-8 flex items-center gap-2 bg-white rounded-full p-2 shadow-lift max-w-xl mx-auto lg:mx-0">
+            <span className="ps-4 text-ink-400"><Search size={20} /></span>
+            <input
+              className="flex-1 bg-transparent outline-none px-2 py-2 text-ink-900 placeholder:text-ink-400 min-w-0"
+              placeholder={t("search_placeholder")}
+            />
+            <a href="#catalog"><Btn size="md" className="whitespace-nowrap">{t("search_button")}</Btn></a>
+          </div>
+
+          {/* Trust row */}
+          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 justify-center lg:justify-start text-sm font-semibold text-ink-600">
+            {[["trust_secure", ShieldCheck], ["trust_validity", CalendarClock], ["trust_exchange", RefreshCw]].map(([k, Icon]) => (
+              <span key={k} className="inline-flex items-center gap-1.5"><Icon size={16} className="text-teal-500" /> {t(k)}</span>
+            ))}
+          </div>
+
+          {/* Mobile visual (the desktop collage is hidden below md) */}
+          <div className="md:hidden mt-8 grid grid-cols-2 gap-3">
+            {[feat, feat2].map((e, i) => (
+              <div key={i} className={`rounded-2xl overflow-hidden shadow-lift ${i === 1 ? "mt-5" : ""}`} style={{ height: 168 }}>
+                <SmartImg src={e.img} alt="" emoji={e.emoji} tint={e.tint} className="w-full h-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Collage */}
+        <div className="relative h-[420px] sm:h-[500px] hidden md:block">
+          <div className="absolute top-4 end-6 w-64 h-80 rounded-[2rem] shadow-pop rotate-3 animate-float overflow-hidden bg-white">
+            <SmartImg src={feat.img} alt={feat.title_he} emoji={feat.emoji} tint={feat.tint} className="w-full h-full" />
+            <div className="absolute bottom-3 start-3 bg-white/95 backdrop-blur rounded-2xl px-3 py-2 shadow-soft">
+              <div className="text-[11px] font-bold text-ink-400">{t("card_from")}</div>
+              <div className="font-display font-extrabold text-coral-600">{nis(feat.price)}</div>
+            </div>
+          </div>
+          <div className="absolute bottom-2 start-2 w-52 h-64 rounded-[2rem] shadow-pop -rotate-6 animate-float-slow overflow-hidden bg-white">
+            <SmartImg src={feat2.img} alt={feat2.title_he} emoji={feat2.emoji} tint={feat2.tint} className="w-full h-full" />
+          </div>
+          <div className="absolute top-1/2 start-1/2 -translate-x-1/2 -translate-y-1/2 z-10 grid place-items-center h-28 w-28 rounded-full bg-white shadow-pop animate-float">
+            <div className="text-center">
+              <Gift size={30} className="mx-auto text-coral-500" />
+              <div className="font-display font-extrabold text-ink-900 mt-1">WOW</div>
+            </div>
+          </div>
+          <div className="absolute top-8 start-4 bg-white rounded-2xl px-4 py-3 shadow-lift -rotate-6 animate-float-slow">
+            <div className="flex items-center gap-1 text-sun-500">
+              {[...Array(5)].map((_, i) => <Star key={i} size={14} fill="currentColor" />)}
+            </div>
+            <div className="text-xs font-bold text-ink-600 mt-1">4.9 / 5</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── STATS ─────────────────────────── */
+
+function StatsStrip({ t }) {
+  const stats = [
+    ["200+", "stat_experiences"],
+    ["48,000+", "stat_reviews"],
+    ["350+", "stat_partners"],
+    [null, "stat_delivery"],
+  ];
+  return (
+    <section className="bg-ink-900 text-white">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+        {stats.map(([val, key], i) => (
+          <div key={i} className="text-center md:text-start min-w-0">
+            {/* Values are mostly short numbers, but one is a word ("Мгновенно" /
+                "מיידי"). break-words keeps any translation inside its column, and
+                the size steps down at md where 4 columns leave only ~160px. */}
+            <div className="font-display text-3xl lg:text-4xl font-extrabold text-coral-400 break-words">
+              {val ?? t("stat_delivery_val")}
+            </div>
+            <div className="text-sm font-medium text-cream-300 mt-1">{t(key)}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── CATEGORIES ─────────────────────────── */
+
+function CategorySection({ t, categories, loc, setActiveCat }) {
+  const cats = categories.length ? categories : FALLBACK_CATS;
+  const scrollToCatalog = (slug) => {
+    setActiveCat(slug);
+    document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" });
+  };
+  return (
+    <section className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-20">
+      <SectionHead title={t("categories_title")} subtitle={t("categories_subtitle")} />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {cats.map((c) => (
+          <button
+            key={c.id ?? c.slug}
+            onClick={() => scrollToCatalog(c.slug)}
+            className="group relative aspect-[3/4] rounded-3xl overflow-hidden shadow-soft hover:shadow-lift hover:-translate-y-1 transition-all duration-300"
+          >
+            <SmartImg src={c.img} alt={loc(c, "name")} emoji={c.emoji} tint={c.tint} className="absolute inset-0" imgClass="group-hover:scale-110" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-900/80 via-ink-900/10 to-transparent" />
+            <div className="absolute bottom-0 inset-x-0 p-4 text-white text-start">
+              <div className="text-2xl mb-1">{c.emoji}</div>
+              <div className="font-display font-bold text-lg leading-tight break-words">{loc(c, "name")}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SectionHead({ title, subtitle, center = false }) {
+  return (
+    <div className={`mb-10 ${center ? "text-center max-w-2xl mx-auto" : ""}`}>
+      <h2 className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight text-ink-900">{title}</h2>
+      {subtitle && <p className="mt-3 text-lg text-ink-500">{subtitle}</p>}
+    </div>
+  );
+}
+
+/* ─────────────────────────── HOW IT WORKS ─────────────────────────── */
+
+function HowItWorks({ t }) {
+  const steps = [
+    { icon: Gift, key: 1, color: "bg-coral-500" },
+    { icon: Ticket, key: 2, color: "bg-sun-500" },
+    { icon: Sparkles, key: 3, color: "bg-teal-500" },
+    { icon: PartyPopper, key: 4, color: "bg-berry-500" },
+  ];
+  return (
+    <section id="how" className="bg-cream-100 py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <SectionHead title={t("how_title")} subtitle={t("how_subtitle")} center />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {steps.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <div key={s.key} className="relative bg-white rounded-3xl p-7 shadow-soft hover:shadow-lift hover:-translate-y-1 transition-all duration-300">
+                <div className="absolute top-6 end-6 font-display text-5xl font-extrabold text-cream-200">{i + 1}</div>
+                <div className={`grid place-items-center h-14 w-14 rounded-2xl ${s.color} text-white mb-5`}>
+                  <Icon size={26} />
+                </div>
+                <h3 className="font-display text-xl font-bold text-ink-900 mb-2">{t(`how_${s.key}_title`)}</h3>
+                <p className="text-ink-500 leading-relaxed">{t(`how_${s.key}_text`)}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── CATALOG ─────────────────────────── */
+
+function Catalog({ t, loc, loading, filtered, categories, activeCat, setActiveCat, openModal, addToGiftBox, inBox, boxFull, rtl }) {
+  const cats = categories.length ? categories : FALLBACK_CATS;
+  return (
+    <section id="catalog" className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-20">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+        <SectionHead title={t("bestsellers_title")} subtitle={t("bestsellers_subtitle")} />
+      </div>
+
+      {/* Filter chips — horizontally scrollable on mobile with an edge fade hint */}
+      <div className="relative mb-8">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap">
+        <FilterChip active={activeCat === "all"} onClick={() => setActiveCat("all")}>{t("cat_all")}</FilterChip>
+        {cats.map((c) => (
+          <FilterChip key={c.id ?? c.slug} active={activeCat === c.slug} onClick={() => setActiveCat(c.slug)}>
+            <span className="me-1">{c.emoji}</span>{loc(c, "name")}
+          </FilterChip>
+        ))}
+        </div>
+        <div className={`sm:hidden pointer-events-none absolute inset-y-0 end-0 w-10 ${rtl ? "bg-gradient-to-r" : "bg-gradient-to-l"} from-cream-50 to-transparent`} />
+      </div>
+
+      {loading ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-3xl overflow-hidden bg-white shadow-soft">
+              <div className="h-56 skeleton" />
+              <div className="p-6 space-y-3">
+                <div className="h-5 w-2/3 skeleton rounded-full" />
+                <div className="h-4 w-1/3 skeleton rounded-full" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((exp) => (
+            <ExperienceCard
+              key={exp.id}
+              {...{ exp, t, loc, openModal, add: () => addToGiftBox(exp), added: inBox(exp.id), boxFull, rtl }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FilterChip({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-bold transition-all ${active ? "bg-coral-500 text-white glow-coral" : "bg-white text-ink-600 shadow-soft hover:text-coral-600"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ExperienceCard({ exp, t, loc, openModal, add, added, boxFull }) {
+  return (
+    <article className="group flex flex-col rounded-3xl overflow-hidden bg-white shadow-soft hover:shadow-lift hover:-translate-y-1 transition-all duration-300">
+      <button onClick={() => openModal(exp)} className="relative h-56 block text-start cursor-pointer">
+        <SmartImg src={exp.img} alt={loc(exp, "title")} emoji={exp.emoji} tint={exp.tint} className="absolute inset-0" imgClass="group-hover:scale-105" />
+        {exp.is_best_seller && (
+          <span className="absolute top-3 start-3"><Pill className="bg-coral-500 text-white shadow-lift"><Sparkles size={12} /> {t("bestseller_badge")}</Pill></span>
+        )}
+        {exp.old_price && (
+          <span className="absolute top-3 end-3"><Pill className="bg-sun-400 text-ink-900">-{Math.round((1 - exp.price / exp.old_price) * 100)}%</Pill></span>
+        )}
+      </button>
+      <div className="flex flex-col flex-1 p-6">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h3 className="font-display text-lg font-bold text-ink-900 leading-snug">{loc(exp, "title")}</h3>
+        </div>
+        <p className="text-sm text-ink-500 leading-relaxed line-clamp-2 mb-4">{loc(exp, "description")}</p>
+        <div className="flex items-center gap-4 text-xs font-semibold text-ink-500 mb-5">
+          {loc(exp, "duration") && <span className="inline-flex items-center gap-1"><Clock size={14} className="text-teal-500" />{loc(exp, "duration")}</span>}
+          {loc(exp, "participants") && <span className="inline-flex items-center gap-1"><Users size={14} className="text-teal-500" />{loc(exp, "participants")}</span>}
+          <Stars rating={exp.rating} count={exp.reviews_count} className="ms-auto" />
+        </div>
+        {/* flex-wrap: on ~320px screens the price and the CTA together exceed the
+            card width, and the card's overflow-hidden would clip the button. */}
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold text-ink-400">{t("card_from")}</div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-2xl font-extrabold text-coral-600">{nis(exp.price)}</span>
+              {exp.old_price && <span className="text-sm text-ink-400 line-through">{nis(exp.old_price)}</span>}
+            </div>
+          </div>
+          <button
+            onClick={add}
+            disabled={added || boxFull}
+            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-3 text-sm font-bold transition-all ${added ? "bg-teal-500 text-white" : boxFull ? "bg-cream-200 text-ink-400" : "bg-coral-50 text-coral-700 hover:bg-coral-500 hover:text-white"}`}
+          >
+            {added ? <><Check size={16} /> {t("card_added")}</> : <><Plus size={16} /> {t("card_add")}</>}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/* ─────────────────────────── OCCASIONS ─────────────────────────── */
+
+function OccasionsBar({ t }) {
+  const items = [
+    ["occasion_birthday", "🎂"], ["occasion_anniversary", "💍"], ["occasion_love", "❤️"],
+    ["occasion_thanks", "🙏"], ["occasion_corporate", "💼"], ["occasion_family", "👨‍👩‍👧"],
+  ];
+  return (
+    <section className="mx-auto max-w-7xl px-4 sm:px-6 pb-4">
+      <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-coral-500 to-coral-700 p-8 sm:p-10 text-white">
+        {/* Thematic photo layer under a coral wash (keeps white text legible; base
+            gradient shows if the image is unavailable). */}
+        <div className="absolute inset-0 bg-cover bg-center opacity-30" style={{ backgroundImage: `url(${scene("1567899378494-47b22a2ae96a")})` }} aria-hidden="true" />
+        <div className="absolute inset-0 bg-gradient-to-br from-coral-600/80 to-coral-800/85" aria-hidden="true" />
+        <div className="relative">
+          <h2 className="font-display text-2xl sm:text-3xl font-extrabold mb-6">{t("occasions_title")}</h2>
+          <div className="flex flex-wrap gap-3">
+            {items.map(([k, e]) => (
+              <a key={k} href="#catalog" className="inline-flex items-center gap-2 rounded-full bg-white/15 hover:bg-white hover:text-coral-600 backdrop-blur px-5 py-3 font-bold transition-all">
+                <span className="text-lg">{e}</span> {t(k)}
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── LOYALTY (VAU CLUB) ─────────────────────────── */
+
+function LoyaltySection({ t, loyalty, user, onSignIn }) {
+  const threshold = loyalty?.threshold || 4;
+  const cycle = loyalty?.cycle ?? 0;          // 0..threshold-1
+  const rewardReady = !!loyalty?.rewardReady;
+  const discount = loyalty?.discountPct || 50;
+  // Dots: filled = purchases done in the current cycle; the last dot is the reward.
+  const dots = Array.from({ length: threshold }, (_, i) => i);
+
+  return (
+    <section id="club" className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-24">
+      <div className="relative overflow-hidden rounded-[2.5rem] mesh-dark text-white px-6 sm:px-12 py-12 sm:py-16">
+        <div className="relative z-10 grid lg:grid-cols-2 gap-10 items-center">
+          <div>
+            <Pill className="bg-white/15 text-white mb-4"><Sparkles size={12} /> {t("club_badge")}</Pill>
+            <h2 className="font-display text-3xl sm:text-4xl font-extrabold mb-3">{t("club_title")}</h2>
+            <p className="text-white/80 leading-relaxed mb-6">{t("club_subtitle", { threshold, discount })}</p>
+            <ol className="space-y-2 text-white/90">
+              <li className="flex items-center gap-3"><span className="grid place-items-center h-7 w-7 rounded-full bg-white/15 font-bold text-sm">1</span> {t("club_step_1")}</li>
+              <li className="flex items-center gap-3"><span className="grid place-items-center h-7 w-7 rounded-full bg-white/15 font-bold text-sm">2</span> {t("club_step_2", { n: threshold - 1 })}</li>
+              <li className="flex items-center gap-3"><span className="grid place-items-center h-7 w-7 rounded-full bg-coral-500 font-bold text-sm">%</span> {t("club_step_3", { threshold, discount })}</li>
+            </ol>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur rounded-3xl p-7 border border-white/15">
+            {user && loyalty ? (
+              <>
+                <div className="text-sm text-white/70 mb-4">{t("club_your_progress")}</div>
+                <div className="flex items-center gap-3 mb-5">
+                  {dots.map((i) => {
+                    const isReward = i === threshold - 1;
+                    const filled = i < cycle;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                        <div className={`grid place-items-center h-12 w-12 rounded-2xl font-bold ${isReward ? (rewardReady ? "bg-coral-500 text-white glow-coral animate-pop" : "bg-white/10 text-white/60 border border-dashed border-white/30") : filled ? "bg-white text-ink-900" : "bg-white/10 text-white/50"}`}>
+                          {isReward ? `-${discount}%` : filled ? <Check size={18} /> : <Gift size={16} />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {rewardReady ? (
+                  <div className="rounded-2xl bg-coral-500 px-4 py-3 text-center font-bold animate-pop">🎁 {t("club_reward_ready", { discount })}</div>
+                ) : (
+                  <div className="text-center text-white/80 text-sm">{t("club_remaining", { n: loyalty.remaining })}</div>
+                )}
+              </>
+            ) : user ? (
+              // Signed in but loyalty couldn't load — don't prompt them to sign in again.
+              <div className="text-center py-6 text-white/70 text-sm">{t("club_unavailable")}</div>
+            ) : (
+              <div className="text-center py-4">
+                <div className="text-5xl mb-3">🎁</div>
+                <p className="text-white/80 mb-5">{t("club_sign_in_cta", { threshold, discount })}</p>
+                <Btn variant="primary" onClick={onSignIn} className="w-full"><LogIn size={16} /> {t("sign_in")}</Btn>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── REVIEWS ─────────────────────────── */
+
+// Star picker for the review form.
+function StarPick({ value, onChange }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button" onClick={() => onChange(n)} className="p-1.5 -m-1" aria-label={`${n}`}>
+          <Star size={22} className={n <= value ? "text-sun-500" : "text-cream-300"} fill={n <= value ? "currentColor" : "none"} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Reusable reviews block: loads published reviews (optionally for one experience)
+// and lets the visitor write one. Used both on the home page and in the modal.
+function ReviewsBlock({ t, experienceId = null, user, compact = false }) {
+  const [items, setItems] = useState(null);   // null = loading
+  const [failed, setFailed] = useState(false);
+  const [name, setName] = useState("");
+  const [rating, setRating] = useState(5);
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  const authorName = name || user?.name || "";
+
+  useEffect(() => {
+    let alive = true;
+    const params = experienceId ? { experienceId } : { limit: 12 };
+    getReviews(params)
+      .then((rows) => { if (alive) setItems(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (alive) { setItems([]); setFailed(true); } });
+    return () => { alive = false; };
+  }, [experienceId]);
+
+  const submit = async () => {
+    setError(""); setBusy(true);
+    try {
+      const review = await postReview({ experienceId: experienceId || undefined, authorName, rating, body });
+      setItems((prev) => [review, ...(prev || [])]);
+      setBody(""); setDone(true); setTimeout(() => setDone(false), 2500);
+    } catch {
+      setError(t("review_error"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canSubmit = authorName.trim() && body.trim().length >= 3 && !busy;
+  // Fallback testimonials (translations) when the API is offline and empty.
+  const showFallback = failed && (items?.length ?? 0) === 0;
+
+  return (
+    <div>
+      {/* List */}
+      {items === null ? (
+        <div className="flex justify-center py-8"><Loader2 className="animate-spin text-coral-400" /></div>
+      ) : showFallback ? (
+        <div className={`grid gap-6 ${compact ? "" : "md:grid-cols-3"}`}>
+          {[1, 2, 3].map((n) => (
+            <figure key={n} className="bg-white rounded-3xl p-7 shadow-soft flex flex-col">
+              <div className="flex gap-1 text-sun-500 mb-4">{[...Array(5)].map((_, i) => <Star key={i} size={16} fill="currentColor" />)}</div>
+              <blockquote className="text-ink-700 leading-relaxed flex-1">"{t(`review_${n}`)}"</blockquote>
+              <figcaption className="mt-6 flex items-center gap-3">
+                <div className="grid place-items-center h-11 w-11 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{t(`review_${n}_name`).charAt(0)}</div>
+                <div><div className="font-bold text-ink-900">{t(`review_${n}_name`)}</div><div className="text-sm text-ink-400">{t(`review_${n}_role`)}</div></div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="text-center text-ink-400 py-6">{t("review_empty")}</p>
+      ) : (
+        <div className={`grid gap-6 ${compact ? "" : "md:grid-cols-3"}`}>
+          {items.slice(0, compact ? 4 : 12).map((r) => (
+            <figure key={r.id} className="bg-white rounded-3xl p-7 shadow-soft flex flex-col">
+              <div className="flex gap-1 text-sun-500 mb-4">{[...Array(5)].map((_, i) => <Star key={i} size={16} className={i < r.rating ? "" : "text-cream-300"} fill={i < r.rating ? "currentColor" : "none"} />)}</div>
+              <blockquote className="text-ink-700 leading-relaxed flex-1">"{r.body}"</blockquote>
+              <figcaption className="mt-6 flex items-center gap-3">
+                <div className="grid place-items-center h-11 w-11 rounded-full bg-gradient-to-br from-coral-400 to-berry-500 text-white font-display font-bold">{(r.author_name || "?").charAt(0)}</div>
+                <div><div className="font-bold text-ink-900">{r.author_name}</div><div className="text-sm text-ink-400">{new Date(r.created_at).toLocaleDateString(fmtLocale())}</div></div>
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+
+      {/* Write a review */}
+      <div className="mt-8 bg-white rounded-3xl p-6 shadow-soft max-w-2xl mx-auto">
+        <h4 className="font-display text-lg font-bold mb-4 flex items-center gap-2"><Star size={18} className="text-sun-500" /> {t("review_write_title")}</h4>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <input value={authorName} onChange={(e) => setName(e.target.value)} placeholder={t("review_name_ph")}
+            className="rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-ink-500 font-bold">{t("review_rating")}</span>
+            <StarPick value={rating} onChange={setRating} />
+          </div>
+        </div>
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder={t("review_body_ph")}
+          className="w-full rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300 mb-3" />
+        {error && <p className="text-coral-600 text-sm font-semibold mb-3">{error}</p>}
+        <div className="flex items-center gap-3">
+          <Btn variant="primary" onClick={submit} disabled={!canSubmit} loading={busy}>{t("review_submit")}</Btn>
+          {done && <span className="text-teal-600 text-sm font-bold flex items-center gap-1"><Check size={16} /> {t("review_thanks")}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Reviews({ t }) {
+  return (
+    <section id="reviews" className="mx-auto max-w-7xl px-4 sm:px-6 py-16 sm:py-24">
+      <SectionHead title={t("reviews_title")} subtitle={t("reviews_subtitle")} center />
+      <ReviewsBlock t={t} />
+    </section>
+  );
+}
+
+/* ─────────────────────────── BUSINESS ─────────────────────────── */
+
+function BusinessBanner({ t, rtl }) {
+  const points = ["business_point_1", "business_point_2", "business_point_3"];
+  return (
+    <section id="business" className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <div className="relative rounded-[2.5rem] mesh-dark text-white overflow-hidden p-8 sm:p-14 grid lg:grid-cols-2 gap-10 items-center">
+        <div>
+          <Pill className="bg-coral-500/20 text-coral-300 mb-5"><Building2 size={13} /> {t("business_badge")}</Pill>
+          <h2 className="font-display text-3xl sm:text-4xl font-extrabold leading-tight mb-4">{t("business_title")}</h2>
+          <p className="text-cream-300 text-lg leading-relaxed mb-6 max-w-lg">{t("business_text")}</p>
+          <ul className="space-y-3 mb-8">
+            {points.map((p) => (
+              <li key={p} className="flex items-center gap-3 font-semibold">
+                <span className="grid place-items-center h-6 w-6 rounded-full bg-teal-500 text-white shrink-0"><Check size={14} /></span>
+                {t(p)}
+              </li>
+            ))}
+          </ul>
+          <Btn variant="primary" size="lg">{t("business_cta")} <ArrowRight size={18} className={rtl ? "rotate-180" : ""} /></Btn>
+        </div>
+        <div className="hidden lg:grid grid-cols-2 gap-4">
+          {FALLBACK_EXPS.slice(0, 4).map((e) => (
+            <div key={e.id} className="rounded-3xl overflow-hidden h-40 shadow-pop">
+              <SmartImg src={e.img} alt="" emoji={e.emoji} tint={e.tint} className="w-full h-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── GUARANTEES ─────────────────────────── */
+
+function Guarantees({ t }) {
+  const items = [
+    [CalendarClock, "guarantee_1", "text-coral-500"],
+    [RefreshCw, "guarantee_2", "text-teal-500"],
+    [ShieldCheck, "guarantee_3", "text-berry-500"],
+    [Headphones, "guarantee_4", "text-sun-500"],
+  ];
+  return (
+    <section className="mx-auto max-w-7xl px-4 sm:px-6 py-16">
+      <SectionHead title={t("guarantee_title")} center />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* At 320px a 2-column cell is ~132px wide, so the inner px-4 left only
+            ~100px for text and Russian words spilled out. Drop it on the
+            narrowest screens and let long words break. */}
+        {items.map(([Icon, k, color]) => (
+          <div key={k} className="text-center px-0 sm:px-4 min-w-0">
+            <div className={`inline-grid place-items-center h-16 w-16 rounded-2xl bg-cream-100 mb-4 ${color}`}>
+              <Icon size={28} />
+            </div>
+            <h3 className="font-display text-lg font-bold text-ink-900 mb-1 break-words">{t(`${k}_title`)}</h3>
+            <p className="text-sm text-ink-500 leading-relaxed break-words">{t(`${k}_text`)}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── NEWSLETTER ─────────────────────────── */
+
+function Newsletter({ t }) {
+  const [sent, setSent] = useState(false);
+  return (
+    <section className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+      <div className="rounded-[2.5rem] bg-sun-400 p-8 sm:p-14 text-center overflow-hidden relative">
+        {/* Warm photo texture kept subtle so the dark copy stays readable. */}
+        <div className="absolute inset-0 bg-cover bg-center opacity-20" style={{ backgroundImage: `url(${scene("1553284965-83fd3e82fa5a")})` }} aria-hidden="true" />
+        <div className="absolute inset-0 bg-sun-400/70" aria-hidden="true" />
+        <div className="absolute -top-10 -end-10 w-48 h-48 rounded-full bg-white/20 blur-2xl" />
+        <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-ink-900 mb-3 relative">{t("newsletter_title")}</h2>
+        <p className="text-ink-800 text-lg mb-7 relative max-w-xl mx-auto">{t("newsletter_text")}</p>
+        <form
+          onSubmit={(e) => { e.preventDefault(); setSent(true); }}
+          className="relative flex flex-col sm:flex-row gap-3 max-w-lg mx-auto"
+        >
+          <input
+            type="email"
+            required
+            placeholder={t("newsletter_placeholder")}
+            className="flex-1 rounded-full bg-white px-6 py-4 outline-none text-ink-900 placeholder:text-ink-400 shadow-soft"
+          />
+          <Btn type="submit" variant="dark" size="lg" className="whitespace-nowrap">
+            {sent ? <><Check size={18} /> {t("copied")}</> : t("newsletter_button")}
+          </Btn>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+/* ─────────────────────────── FOOTER ─────────────────────────── */
+
+function Footer({ t, lang, goRedeem, goLegal, goAdmin }) {
+  const explore = ["nav_experiences", "nav_how", "nav_reviews", "nav_business"];
+  const support = [
+    { key: "footer_faq", href: "#how" },
+    { key: "footer_terms", action: () => goLegal("terms") },
+    { key: "footer_privacy", action: () => goLegal("privacy") },
+    { key: "footer_contact", href: "#business" },
+  ];
+  return (
+    <footer className="bg-ink-900 text-cream-300 mt-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-14 grid gap-10 md:grid-cols-4">
+        <div className="md:col-span-2 max-w-sm">
+          <div className="mb-4">
+            <img src={LOGO_LIGHT} alt="VAU — the gift that lasts a lifetime" className="h-24 w-auto" />
+          </div>
+          <p className="leading-relaxed text-cream-300/80">{t("footer_about")}</p>
+          <button onClick={goRedeem} className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-coral-500 px-5 py-3 font-bold text-white transition-colors">
+            <Ticket size={17} /> {t("redeem_voucher")}
+          </button>
+        </div>
+        <div>
+          <h4 className="font-display font-bold text-white mb-4">{t("footer_explore")}</h4>
+          <ul className="space-y-2.5">
+            {explore.map((k) => (
+              <li key={k}><a href="#catalog" className="hover:text-coral-400 transition-colors">{t(k)}</a></li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4 className="font-display font-bold text-white mb-4">{t("footer_support")}</h4>
+          <ul className="space-y-2.5">
+            {support.map((s) => (
+              <li key={s.key}>
+                {s.action ? (
+                  <button onClick={s.action} className="hover:text-coral-400 transition-colors">{t(s.key)}</button>
+                ) : (
+                  <a href={s.href} className="hover:text-coral-400 transition-colors">{t(s.key)}</a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-white/10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-cream-300/60">
+          <span>© {new Date().getFullYear()} VAU · {t("footer_rights")} · <button onClick={goAdmin} className="hover:text-coral-400">{lang === "he" ? "ניהול" : "Админ"}</button></span>
+          <span>{lang === "he" ? "נבנה באהבה בישראל 🇮🇱" : "Сделано с любовью в Израиле 🇮🇱"}</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ─────────────────────────── GIFT DRAWER ─────────────────────────── */
+
+function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGiftBox, checkoutLoading, handleCheckout, orderCode, setOrderCode, voucher, setVoucher, checkoutError, user, rtl, goLegal, loyalty, lastPayment, setLastPayment }) {
+  const [copied, setCopied] = useState(false);
+  const [buyerEmailInput, setBuyerEmailInput] = useState("");
+  const [voucherType, setVoucherType] = useState("bearer");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [method, setMethod] = useState("card");
+  const [cardLast4, setCardLast4] = useState("");
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  // A Turnstile token is single-use and is consumed on every checkout POST, so
+  // after each attempt the widget is remounted (bump its key) to mint a fresh
+  // one — otherwise a retry after a decline would fail the bot check on a stale token.
+  const [tsKey, setTsKey] = useState(0);
+  const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
+
+  // VAU Club preview: if the signed-in user's next gift is the reward one, show
+  // the 50% discount here. The server re-checks and applies it authoritatively.
+  const rewardReady = !!(user && loyalty?.rewardReady);
+  const discountPct = loyalty?.discountPct || 50;
+  const discount = rewardReady ? Math.round(total * discountPct / 100) : 0;
+  const payable = total - discount;
+
+  // Default to the signed-in user's email without an effect (avoids cascading renders).
+  const buyerEmail = buyerEmailInput || user?.email || "";
+  const setBuyerEmail = setBuyerEmailInput;
+
+  const copy = () => {
+    navigator.clipboard?.writeText(orderCode).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 1800);
+    }).catch(() => {});
+  };
+  // Reset the whole drawer form so a subsequent order never inherits the
+  // previous recipient, voucher type, card, or consent ticks.
+  const resetForm = () => {
+    setBuyerEmailInput(""); setVoucherType("bearer"); setRecipientName(""); setRecipientEmail("");
+    setMethod("card"); setCardLast4(""); setAcceptTerms(false); setMarketingOptIn(false);
+    setTurnstileToken(""); setTsKey((k) => k + 1);
+  };
+  const closeAll = () => { setOrderCode(null); setVoucher(null); setLastPayment?.(null); resetForm(); close(); };
+
+  const emailOk = /.+@.+\..+/.test(buyerEmail);
+  const recipientOk = voucherType !== "personalized" || /.+@.+\..+/.test(recipientEmail);
+  const humanOk = !TURNSTILE_ON || !!turnstileToken;
+  const canPay = emailOk && recipientOk && giftBox.length > 0 && acceptTerms && humanOk;
+
+  const submit = async () => {
+    await handleCheckout({ buyerEmail, buyerName: user?.name, voucherType, recipientName, recipientEmail, method, cardLast4, acceptTerms, marketingOptIn, turnstileToken });
+    if (TURNSTILE_ON) { setTurnstileToken(""); setTsKey((k) => k + 1); } // consumed — refresh for any retry
+  };
+
+  const methods = [
+    ["card", t("pay_card"), CreditCard],
+    ["apple_pay", "Apple Pay", Smartphone],
+    ["google_pay", "Google Pay", Smartphone],
+  ];
+
+  const trapRef = useFocusTrap(open, close);
+  return (
+    <div className={`fixed inset-0 z-[60] ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+      <div onClick={close} className={`absolute inset-0 bg-ink-900/50 backdrop-blur-sm transition-opacity duration-300 ${open ? "opacity-100" : "opacity-0"}`} />
+      <aside
+        ref={trapRef} role="dialog" aria-modal="true" aria-label={t("drawer_title")} tabIndex={-1}
+        className={`absolute inset-y-0 end-0 w-full max-w-md bg-cream-50 shadow-pop flex flex-col transition-transform duration-300 ${open ? "translate-x-0" : (rtl ? "-translate-x-full" : "translate-x-full")}`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-cream-200">
+          <h3 className="font-display text-xl font-extrabold flex items-center gap-2"><Gift size={20} className="text-coral-500" /> {t("drawer_title")}</h3>
+          <button onClick={close} aria-label="Close" className="grid place-items-center h-11 w-11 rounded-full bg-white shadow-soft hover:text-coral-600"><X size={20} /></button>
+        </div>
+
+        {orderCode ? (
+          /* Success state — issued e-voucher with QR + barcode */
+          <div className="flex-1 overflow-y-auto text-center px-6 py-6 animate-pop">
+            <div className="text-5xl mb-3">🎉</div>
+            <h4 className="font-display text-2xl font-extrabold mb-1">{t("order_success_title")}</h4>
+            <p className="text-ink-500 mb-4 text-sm">{voucher ? t("voucher_ready") : t("order_success_text")}</p>
+            <div className="rounded-2xl border-2 border-dashed border-coral-300 bg-white p-5 mb-4">
+              <div className="text-xs font-bold text-ink-400 mb-1">{t("order_code_label")}</div>
+              <div className="font-display text-2xl font-extrabold tracking-widest text-coral-600">{orderCode}</div>
+              {voucher?.qr && (
+                <>
+                  <img src={voucher.qr} alt="QR" className="mx-auto mt-4 w-40 h-40 rounded-xl" />
+                  {voucher.barcode && <img src={voucher.barcode} alt="barcode" className="mx-auto mt-3 max-w-full" />}
+                  <p className="text-[11px] text-ink-400 mt-2">{t("voucher_scan")}</p>
+                </>
+              )}
+            </div>
+            {lastPayment?.discount > 0 && (
+              <p className="text-sm font-bold text-teal-600 mb-2 flex items-center justify-center gap-1.5"><Sparkles size={15} /> {t("club_saved", { amount: nis(lastPayment.discount) })}</p>
+            )}
+            {buyerEmail && <p className="text-xs text-ink-500 mb-4">{t("email_sent_to")}: <b>{buyerEmail}</b></p>}
+            <Btn variant="soft" onClick={copy} className="mb-3 w-full">
+              {copied ? <><Check size={16} /> {t("copied")}</> : <><Copy size={16} /> {t("copy_code")}</>}
+            </Btn>
+            <button onClick={closeAll} className="text-sm font-bold text-ink-500 hover:text-coral-600">{t("continue_shopping")}</button>
+          </div>
+        ) : giftBox.length === 0 ? (
+          /* Empty state */
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
+            <div className="grid place-items-center h-24 w-24 rounded-full bg-cream-100 mb-5"><Gift size={40} className="text-coral-300" /></div>
+            <p className="text-ink-500 mb-6">{t("empty_box")}</p>
+            <Btn onClick={close} variant="primary">{t("continue_shopping")}</Btn>
+          </div>
+        ) : (
+          /* Items */
+          <>
+            <div className="flex-1 overflow-y-auto">
+            <div className="px-6 py-3 text-sm font-semibold text-ink-500 bg-cream-100">{t("box_hint")}</div>
+            <div className="px-6 py-4 space-y-4">
+              {giftBox.map((e) => (
+                <div key={e.id} className="flex gap-3 items-center bg-white rounded-2xl p-3 shadow-soft">
+                  <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0">
+                    <SmartImg src={e.img} alt="" emoji={e.emoji} tint={e.tint} className="w-full h-full" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-ink-900 truncate">{loc(e, "title")}</div>
+                    <div className="font-display font-extrabold text-coral-600">{nis(e.price)}</div>
+                  </div>
+                  <button onClick={() => removeFromGiftBox(e.id)} className="grid place-items-center h-9 w-9 rounded-full hover:bg-coral-50 text-ink-400 hover:text-coral-600 shrink-0">
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              ))}
+              {giftBox.length < 5 && (
+                <button onClick={close} className="w-full rounded-2xl border-2 border-dashed border-cream-300 py-4 text-ink-400 font-bold hover:border-coral-300 hover:text-coral-600 flex items-center justify-center gap-2">
+                  <Plus size={18} /> {5 - giftBox.length}
+                </button>
+              )}
+            </div>
+            <div className="border-t border-cream-200 px-6 py-5 space-y-4 bg-white">
+              {/* Buyer email */}
+              <div>
+                <label className="text-xs font-bold text-ink-500 mb-1 block">{t("buyer_email")}</label>
+                <input type="email" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} placeholder="you@email.com"
+                  className="w-full rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+              </div>
+
+              {/* Voucher type: bearer vs personalized */}
+              <div>
+                <label className="text-xs font-bold text-ink-500 mb-1 block">{t("voucher_type")}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[["bearer", t("voucher_bearer")], ["personalized", t("voucher_personalized")]].map(([val, label]) => (
+                    <button key={val} onClick={() => setVoucherType(val)}
+                      className={`rounded-xl px-3 py-2 text-xs font-bold border transition-all ${voucherType === val ? "bg-coral-500 text-white border-coral-500" : "bg-white text-ink-600 border-cream-300 hover:border-coral-300"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {voucherType === "personalized" && (
+                <div className="space-y-2 rounded-xl bg-cream-100 p-3">
+                  <input value={recipientName} onChange={(e) => setRecipientName(e.target.value)} placeholder={t("recipient_name")}
+                    className="w-full rounded-lg bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                  <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder={t("recipient_email")}
+                    className="w-full rounded-lg bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                  <p className="text-[11px] text-ink-400 flex items-center gap-1"><ShieldCheck size={12} className="text-teal-500" /> {t("personalized_hint")}</p>
+                </div>
+              )}
+
+              {/* Payment method */}
+              <div>
+                <label className="text-xs font-bold text-ink-500 mb-1 block">{t("pay_method")}</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {methods.map(([val, label, Icon]) => (
+                    <button key={val} onClick={() => setMethod(val)}
+                      className={`rounded-xl px-2 py-2.5 text-[11px] font-bold border flex flex-col items-center gap-1 transition-all ${method === val ? "bg-ink-900 text-white border-ink-900" : "bg-white text-ink-600 border-cream-300 hover:border-coral-300"}`}>
+                      <Icon size={16} /> {label}
+                    </button>
+                  ))}
+                </div>
+                {method === "card" && (
+                  <input value={cardLast4} onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="•••• •••• •••• 1234"
+                    className="w-full mt-2 rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                )}
+              </div>
+
+              {/* Consent: Terms/Privacy (required) + marketing opt-in (optional) */}
+              <div className="space-y-2.5 pt-1">
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-ink-600 leading-snug">
+                  <input type="checkbox" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-coral-500" />
+                  <span>
+                    {t("consent_terms_pre")}{" "}
+                    <button type="button" onClick={() => goLegal?.("terms")} className="font-bold text-coral-600 underline">{t("footer_terms")}</button>
+                    {" "}{t("consent_and")}{" "}
+                    <button type="button" onClick={() => goLegal?.("privacy")} className="font-bold text-coral-600 underline">{t("footer_privacy")}</button>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-ink-600 leading-snug">
+                  <input type="checkbox" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-coral-500" />
+                  <span>{t("consent_marketing")}</span>
+                </label>
+              </div>
+
+              {/* VAU Club progress / reward */}
+              {user && loyalty && (
+                rewardReady ? (
+                  <div className="rounded-xl bg-coral-50 border border-coral-200 px-4 py-2.5 text-sm font-bold text-coral-700 flex items-center gap-2">
+                    <Sparkles size={15} /> {t("club_reward_applied", { discount: discountPct })}
+                  </div>
+                ) : loyalty.remaining > 0 ? (
+                  <div className="rounded-xl bg-cream-100 px-4 py-2.5 text-xs text-ink-500 flex items-center gap-2">
+                    <Gift size={14} className="text-coral-500" /> {t("club_drawer_hint", { n: loyalty.remaining, discount: discountPct })}
+                  </div>
+                ) : null
+              )}
+
+            </div>
+            </div>
+
+            {/* Sticky checkout footer — always reachable; clears the iOS home bar. */}
+            <div className="shrink-0 border-t border-cream-200 bg-white px-6 pt-4 space-y-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-ink-500">{t("total")}</span>
+                <span className="font-display text-2xl font-extrabold text-ink-900">
+                  {discount > 0 && <span className="text-ink-300 line-through text-lg me-2 font-bold">{nis(total)}</span>}
+                  {nis(payable)}
+                </span>
+              </div>
+              {checkoutError && (
+                <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center">{checkoutError}</p>
+              )}
+              {TURNSTILE_ON && (
+                <div className="flex justify-center">
+                  <Turnstile key={tsKey} action="checkout" onToken={setTurnstileToken} />
+                </div>
+              )}
+              <Btn variant="primary" size="lg" className="w-full" loading={checkoutLoading} disabled={!canPay} onClick={submit}>
+                {t("checkout")} · {nis(payable)}
+              </Btn>
+              <button onClick={clearGiftBox} className="w-full text-sm font-bold text-ink-400 hover:text-coral-600">{t("clear_box")}</button>
+            </div>
+          </>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+/* ─────────────────────────── EXPERIENCE MODAL ─────────────────────────── */
+
+function ExperienceModal({ exp, close, t, loc, add, added, boxFull, user }) {
+  const biz = exp.business;
+  const trapRef = useFocusTrap(true, close);
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-6" onClick={close}>
+      <div className="absolute inset-0 bg-ink-900/60 backdrop-blur-sm animate-pop" />
+      <div ref={trapRef} role="dialog" aria-modal="true" aria-label={loc(exp, "title")} tabIndex={-1} className="relative bg-cream-50 w-full max-w-2xl rounded-t-[2rem] sm:rounded-[2rem] overflow-hidden shadow-pop animate-rise max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="relative h-64 shrink-0">
+          <SmartImg src={exp.img} alt={loc(exp, "title")} emoji={exp.emoji} tint={exp.tint} className="absolute inset-0" />
+          <button onClick={close} className="absolute top-4 end-4 grid place-items-center h-10 w-10 rounded-full bg-white/90 backdrop-blur text-ink-900 hover:text-coral-600 shadow-soft"><X size={20} /></button>
+          {exp.is_best_seller && <span className="absolute top-4 start-4"><Pill className="bg-coral-500 text-white"><Sparkles size={12} /> {t("bestseller_badge")}</Pill></span>}
+        </div>
+        <div className="p-7 overflow-y-auto">
+          <div className="flex items-center gap-3 mb-3">
+            <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-ink-900">{loc(exp, "title")}</h2>
+          </div>
+          <Stars rating={exp.rating} count={exp.reviews_count} className="mb-4" />
+          <p className="text-ink-600 leading-relaxed mb-6">{loc(exp, "description")}</p>
+          <div className="flex flex-wrap gap-3 mb-6">
+            {loc(exp, "duration") && <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow-soft"><Clock size={16} className="text-teal-500" /> {t("duration")}: {loc(exp, "duration")}</span>}
+            {loc(exp, "participants") && <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink-600 shadow-soft"><Users size={16} className="text-teal-500" /> {t("participants")}: {loc(exp, "participants")}</span>}
+          </div>
+
+          {/* Providing business / partner */}
+          {biz && (
+            <div className="rounded-2xl border border-cream-200 bg-white p-5 mb-6">
+              <div className="text-xs font-bold text-ink-400 mb-2">{t("provided_by")}</div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="grid place-items-center h-12 w-12 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 text-white text-2xl shrink-0">{biz.emoji || "🏢"}</div>
+                <div className="min-w-0">
+                  <div className="font-display text-lg font-extrabold text-ink-900 truncate">{loc(biz, "name")}</div>
+                  <div className="flex items-center gap-3 text-sm text-ink-400">
+                    {biz.rating && <span className="inline-flex items-center gap-1"><Star size={13} className="text-sun-500" fill="currentColor" /> {Number(biz.rating).toFixed(1)}</span>}
+                    {biz.since && <span>{t("partner_since", { year: biz.since })}</span>}
+                  </div>
+                </div>
+              </div>
+              {loc(biz, "description") && <p className="text-ink-600 text-sm leading-relaxed mb-2">{loc(biz, "description")}</p>}
+              {loc(biz, "location") && <div className="inline-flex items-center gap-1.5 text-sm text-ink-500 font-semibold"><Building2 size={14} className="text-teal-500" /> {loc(biz, "location")}</div>}
+            </div>
+          )}
+
+          {/* Reviews for this experience */}
+          {exp.id != null && (
+            <div className="mb-2">
+              <h3 className="font-display text-lg font-bold text-ink-900 mb-4">{t("reviews_for_experience")}</h3>
+              <ReviewsBlock t={t} experienceId={exp.id} user={user} compact />
+            </div>
+          )}
+        </div>
+        {/* flex-wrap so the price and the CTA drop onto separate rows instead of
+            overflowing (and being clipped) on very narrow phones (~320px). */}
+        <div className="border-t border-cream-200 bg-white p-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-ink-400">{t("card_from")}</div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-3xl font-extrabold text-coral-600">{nis(exp.price)}</span>
+              {exp.old_price && <span className="text-ink-400 line-through">{nis(exp.old_price)}</span>}
+            </div>
+          </div>
+          <Btn variant="primary" size="lg" onClick={add} disabled={added || boxFull}>
+            {added ? <><Check size={18} /> {t("card_added")}</> : <><Gift size={18} /> {t("card_add")}</>}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── REDEEM VIEW ─────────────────────────── */
+
+// Read QR-link params once at module load (client-only SPA).
+const REDEEM_PARAMS = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+
+/* ─────────────────────────── EXCHANGE VIEW (swap / upgrade a voucher) ─────────────────────────── */
+
+function ExchangeView({ goHome, goRedeem, experiences, loc, t, rtl }) {
+  const [step, setStep] = useState(0); // 0 code, 1 pick, 2 confirm/pay, 3 done
+  const [code, setCode] = useState(() => (REDEEM_PARAMS.get("code") || "").toUpperCase());
+  const [token] = useState(() => REDEEM_PARAMS.get("t") || "");
+  const [signature] = useState(() => REDEEM_PARAMS.get("s") || "");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [faceValue, setFaceValue] = useState(0);
+  const [target, setTarget] = useState(null);
+  const [method, setMethod] = useState("card");
+  const [cardLast4, setCardLast4] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const recipient = recipientEmail ? { email: recipientEmail } : undefined;
+  const topUp = target ? Math.max(0, Number(target.price) - faceValue) : 0;
+  const methods = [["card", t("pay_card"), CreditCard], ["apple_pay", "Apple Pay", Smartphone], ["google_pay", "Google Pay", Smartphone]];
+
+  const lookup = async (e) => {
+    e?.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true); setError("");
+    try {
+      const res = await activateVoucher({ code: code.trim(), token: token || undefined, signature: signature || undefined, recipient });
+      setFaceValue(Number(res.faceValue) || 0);
+      setStep(1);
+    } catch (err) {
+      const reason = err?.response?.data?.error;
+      setError(reason === "recipient_mismatch" ? t("redeem_recipient_email") : t("redeem_error"));
+    } finally { setLoading(false); }
+  };
+
+  const confirm = async () => {
+    if (!target) return;
+    setLoading(true); setError("");
+    try {
+      // Server recomputes the top-up and charges the difference; only advances on success.
+      await exchangeVoucher({ code: code.trim(), experienceId: target.id, token: token || undefined, signature: signature || undefined, recipient, method, cardLast4: cardLast4 || undefined });
+      setStep(3);
+    } catch {
+      setError(t("exchange_error"));
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen mesh-warm">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-10">
+        <button onClick={goHome} className="inline-flex items-center gap-2 text-sm font-bold text-ink-500 hover:text-coral-600 mb-8">
+          {rtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />} {t("back_home")}
+        </button>
+        <div className="flex items-center gap-2 mb-6">
+          <img src={LOGO_WORDMARK} alt="VAU" className="h-9 w-auto" />
+        </div>
+
+        {step === 0 && (
+          <form onSubmit={lookup} className="bg-white rounded-3xl shadow-lift p-8 sm:p-10 max-w-xl mx-auto animate-rise text-center">
+            <div className="inline-grid place-items-center h-16 w-16 rounded-2xl bg-coral-50 text-coral-500 mb-5"><RefreshCw size={28} /></div>
+            <h1 className="font-display text-3xl font-extrabold mb-2">{t("exchange_title")}</h1>
+            <p className="text-ink-500 mb-7">{t("exchange_intro")}</p>
+            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t("redeem_code_placeholder")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-5 text-center text-2xl font-display font-extrabold tracking-widest text-ink-900 outline-none focus:ring-2 focus:ring-coral-400 mb-3 placeholder:text-ink-300 placeholder:tracking-normal" />
+            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} placeholder={t("redeem_recipient_email")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-3.5 text-center text-sm outline-none focus:ring-2 focus:ring-coral-300 mb-3 placeholder:text-ink-300" />
+            {error && <p className="text-coral-600 text-sm font-semibold mb-3">{error}</p>}
+            <Btn type="submit" variant="primary" size="lg" className="w-full" loading={loading}>{t("exchange_lookup")}</Btn>
+          </form>
+        )}
+
+        {step === 1 && (
+          <div className="animate-rise">
+            <div className="bg-white rounded-2xl shadow-soft p-4 mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 font-bold text-ink-700"><Ticket size={18} className="text-coral-500" /> {code}</div>
+              <div className="text-end">
+                <div className="text-[11px] font-bold text-ink-400">{t("exchange_value")}</div>
+                <div className="font-display text-xl font-extrabold text-teal-600">{nis(faceValue)}</div>
+              </div>
+            </div>
+            <h2 className="font-display text-2xl font-extrabold mb-1">{t("exchange_choose")}</h2>
+            <p className="text-ink-500 text-sm mb-5">{t("exchange_choose_hint")}</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {experiences.map((exp) => {
+                const up = Math.max(0, Number(exp.price) - faceValue);
+                return (
+                  <button key={exp.id} onClick={() => { setTarget(exp); setError(""); setStep(2); }}
+                    className="group flex items-center gap-3 bg-white rounded-2xl shadow-soft hover:shadow-lift p-3 text-start transition-all hover:-translate-y-0.5">
+                    <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0"><SmartImg src={exp.img} alt="" emoji={exp.emoji} tint={exp.tint} className="w-full h-full" /></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-display font-bold text-ink-900 truncate">{loc(exp, "title")}</div>
+                      <div className="font-display font-extrabold text-coral-600">{nis(exp.price)}</div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-extrabold ${up > 0 ? "bg-sun-400 text-ink-900" : "bg-teal-500 text-white"}`}>
+                      {up > 0 ? `+${nis(up)}` : "✓"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && target && (
+          <div className="max-w-xl mx-auto animate-rise">
+            <button onClick={() => setStep(1)} className="inline-flex items-center gap-2 text-sm font-bold text-ink-500 hover:text-coral-600 mb-4">
+              {rtl ? <ArrowRight size={16} /> : <ArrowLeft size={16} />} {t("exchange_back")}
+            </button>
+            <div className="bg-white rounded-3xl shadow-lift p-6 sm:p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="h-20 w-20 rounded-2xl overflow-hidden shrink-0"><SmartImg src={target.img} alt="" emoji={target.emoji} tint={target.tint} className="w-full h-full" /></div>
+                <div>
+                  <div className="font-display text-xl font-extrabold">{loc(target, "title")}</div>
+                  <Stars rating={target.rating} count={target.reviews_count} />
+                </div>
+              </div>
+              <div className="space-y-2 text-sm border-t border-cream-200 pt-4">
+                <div className="flex justify-between"><span className="text-ink-500">{t("exchange_value")}</span><span className="font-bold">{nis(faceValue)}</span></div>
+                <div className="flex justify-between"><span className="text-ink-500">{t("exchange_new_price")}</span><span className="font-bold">{nis(target.price)}</span></div>
+                <div className="flex justify-between text-base pt-2 border-t border-cream-200">
+                  <span className="font-extrabold text-ink-900">{t("exchange_topup")}</span>
+                  <span className="font-display font-extrabold text-coral-600">{topUp > 0 ? nis(topUp) : t("exchange_covered")}</span>
+                </div>
+              </div>
+              {topUp > 0 && (
+                <div className="mt-5">
+                  <div className="grid grid-cols-3 gap-2">
+                    {methods.map(([val, label, Icon]) => (
+                      <button key={val} onClick={() => setMethod(val)}
+                        className={`rounded-xl px-2 py-2.5 text-[11px] font-bold border flex flex-col items-center gap-1 transition-all ${method === val ? "bg-ink-900 text-white border-ink-900" : "bg-white text-ink-600 border-cream-300 hover:border-coral-300"}`}>
+                        <Icon size={16} /> {label}
+                      </button>
+                    ))}
+                  </div>
+                  {method === "card" && (
+                    <input value={cardLast4} onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="•••• •••• •••• 1234"
+                      className="w-full mt-2 rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-coral-300" />
+                  )}
+                </div>
+              )}
+              {error && <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center mt-4">{error}</p>}
+              <Btn variant="primary" size="lg" className="w-full mt-5" loading={loading} onClick={confirm}>
+                {topUp > 0 ? `${t("exchange_pay")} · ${nis(topUp)}` : t("exchange_confirm")}
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="max-w-xl mx-auto bg-white rounded-3xl shadow-lift p-8 sm:p-12 text-center animate-pop">
+            <div className="text-6xl mb-5">🎉</div>
+            <h2 className="font-display text-3xl font-extrabold mb-3">{t("exchange_done_title")}</h2>
+            <p className="text-ink-500 mb-8">{t("exchange_done_text")}</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Btn variant="primary" size="lg" onClick={goRedeem}>{t("exchange_go_redeem")}</Btn>
+              <Btn variant="ghost" size="lg" onClick={goHome}>{t("back_home")}</Btn>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RedeemView({ goHome, loc, t, rtl }) {
+  const [step, setStep] = useState(0); // 0 enter code, 1 choose, 2 done
+  const [code, setCode] = useState(() => (REDEEM_PARAMS.get("code") || "").toUpperCase());
+  const [token] = useState(() => REDEEM_PARAMS.get("t") || "");
+  const [signature] = useState(() => REDEEM_PARAMS.get("s") || "");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [choosing, setChoosing] = useState(null);
+  const [error, setError] = useState("");
+
+  const recipient = recipientEmail ? { email: recipientEmail } : undefined;
+
+  const activate = async (e) => {
+    e?.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true); setError("");
+    try {
+      // Only a code the server recognises unlocks the options. A 404 for a
+      // mistyped/nonexistent voucher must stay an error, not open selection.
+      const res = await activateVoucher({ code: code.trim(), token: token || undefined, signature: signature || undefined, recipient });
+      setOptions(res.options || []);
+      setStep(1);
+    } catch (err) {
+      const reason = err?.response?.data?.error;
+      setError(reason === "recipient_mismatch" ? t("redeem_recipient_email") : t("redeem_error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const choose = async (exp) => {
+    setChoosing(exp.id); setError("");
+    try {
+      // Only confirm once the backend has recorded the selection (single-use,
+      // atomic); otherwise the recipient would think scheduling is done.
+      await redeemVoucher({ code: code.trim(), experienceId: exp.id, token: token || undefined, signature: signature || undefined, recipient });
+      setStep(2);
+    } catch {
+      setError(t("redeem_select_error"));
+    } finally {
+      setChoosing(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen mesh-warm">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 py-10">
+        <button onClick={goHome} className="inline-flex items-center gap-2 text-sm font-bold text-ink-500 hover:text-coral-600 mb-10">
+          {rtl ? <ArrowRight size={18} /> : <ArrowLeft size={18} />} {t("back_home")}
+        </button>
+
+        <div className="flex items-center gap-2 mb-8">
+          <img src={LOGO_WORDMARK} alt="VAU" className="h-9 w-auto" />
+        </div>
+
+        {step === 0 && (
+          <form onSubmit={activate} className="bg-white rounded-3xl shadow-lift p-8 sm:p-10 text-center animate-rise">
+            <div className="inline-grid place-items-center h-16 w-16 rounded-2xl bg-coral-50 text-coral-500 mb-5"><Ticket size={30} /></div>
+            <h1 className="font-display text-3xl font-extrabold mb-2">{t("redeem_title")}</h1>
+            <p className="text-ink-500 mb-7">{t("redeem_intro")}</p>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder={t("redeem_code_placeholder")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-5 text-center text-2xl font-display font-extrabold tracking-widest text-ink-900 outline-none focus:ring-2 focus:ring-coral-400 mb-3 placeholder:text-ink-300 placeholder:tracking-normal"
+            />
+            <input
+              type="email"
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
+              placeholder={t("redeem_recipient_email")}
+              className="w-full rounded-2xl bg-cream-100 px-6 py-3.5 text-center text-sm outline-none focus:ring-2 focus:ring-coral-300 mb-3 placeholder:text-ink-300"
+            />
+            {error && <p className="text-coral-600 text-sm font-semibold mb-3">{error}</p>}
+            <Btn type="submit" variant="primary" size="lg" className="w-full" loading={loading}>{t("redeem_activate")}</Btn>
+          </form>
+        )}
+
+        {step === 1 && (
+          <div className="animate-rise">
+            <div className="bg-teal-500/10 border border-teal-500/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
+              <span className="grid place-items-center h-9 w-9 rounded-full bg-teal-500 text-white"><Check size={18} /></span>
+              <div>
+                <div className="font-display font-bold text-ink-900">{t("redeem_choose_title")}</div>
+                <div className="text-sm text-ink-500">{t("redeem_choose_text")}</div>
+              </div>
+            </div>
+            {error && <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center mb-4">{error}</p>}
+            <div className="space-y-3">
+              {options.map((exp) => (
+                <button
+                  key={exp.id}
+                  onClick={() => choose(exp)}
+                  disabled={choosing != null}
+                  className="group w-full bg-white rounded-2xl shadow-soft hover:shadow-lift p-3 flex items-center gap-4 text-start transition-all hover:-translate-y-0.5 disabled:opacity-60"
+                >
+                  <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0">
+                    <SmartImg src={exp.img} alt="" emoji={exp.emoji} tint={exp.tint} className="w-full h-full" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-bold text-ink-900 truncate">{loc(exp, "title")}</div>
+                    <Stars rating={exp.rating} count={exp.reviews_count} />
+                  </div>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-coral-50 text-coral-700 px-4 py-2 font-bold group-hover:bg-coral-500 group-hover:text-white transition-all shrink-0">
+                    {choosing === exp.id
+                      ? <Loader2 size={16} className="animate-spin" />
+                      : <>{t("select")} {rtl ? <ChevronLeft size={16} /> : <ArrowRight size={16} />}</>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="bg-white rounded-3xl shadow-lift p-8 sm:p-12 text-center animate-pop">
+            <div className="text-6xl mb-5">🎊</div>
+            <h2 className="font-display text-3xl font-extrabold mb-3">{t("redeem_done_title")}</h2>
+            <p className="text-ink-500 mb-8 max-w-md mx-auto">{t("redeem_done_text")}</p>
+            <Btn variant="primary" size="lg" onClick={goHome}>{t("back_home")}</Btn>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

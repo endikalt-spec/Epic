@@ -1,24 +1,18 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import VAU from './VAU';
-import { StoreProvider, useStore } from './StoreContext';
+import Vau from './Vau';
+import { StoreProvider } from './StoreContext';
 
 const AppContent = () => {
   const { i18n } = useTranslation();
 
   useEffect(() => {
-    document.documentElement.dir = i18n.language === 'he' ? 'rtl' : 'ltr';
-    document.documentElement.lang = i18n.language;
+    const lang = i18n.language?.startsWith('ru') ? 'ru' : 'he';
+    document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr';
+    document.documentElement.lang = lang;
   }, [i18n.language]);
 
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<VAU />} />
-      </Routes>
-    </Router>
-  );
+  return <Vau />;
 };
 
 function App() {

@@ -4,18 +4,29 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js", "init-db": "node init-db.js"
+    "start": "node index.js",
+    "init-db": "node init-db.js",
+    "crm:setup": "node scripts/brevo-setup.js",
+    "crm:test": "node scripts/brevo-test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
+    "bwip-js": "^4.11.2",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.11.0",
-    "pg": "^8.21.0"
+    "nodemailer": "^9.0.5",
+    "pg": "^8.21.0",
+    "qrcode": "^1.5.4"
   }
 }
