@@ -16,6 +16,8 @@ import GiftReveal from "./GiftReveal";
 import AdminPanel from "./AdminPanel";
 import { LOGO_WORDMARK, LOGO_FULL, LOGO_LIGHT } from "./logo";
 import { useFocusTrap } from "./useFocusTrap";
+import Turnstile from "./Turnstile";
+import { TURNSTILE_ON } from "./turnstileEnv";
 import { API_URL, DEMO, checkout as apiCheckout, activateVoucher, redeemVoucher, exchangeVoucher, getMe, getLoyalty, getReviews, postReview } from "./api";
 import i18n from "./i18n";
 const fmtLocale = () => (i18n.language === "ru" ? "ru-RU" : "he-IL");
@@ -276,6 +278,7 @@ export default function Vau() {
         cardLast4: form.cardLast4 || undefined,
         acceptTerms: form.acceptTerms,
         marketingOptIn: form.marketingOptIn,
+        turnstileToken: form.turnstileToken,
         locale: i18n.language,
       });
       // Only surface a voucher the server actually issued; only then clear the cart.
@@ -1234,6 +1237,11 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
   const [cardLast4, setCardLast4] = useState("");
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  // A Turnstile token is single-use and is consumed on every checkout POST, so
+  // after each attempt the widget is remounted (bump its key) to mint a fresh
+  // one — otherwise a retry after a decline would fail the bot check on a stale token.
+  const [tsKey, setTsKey] = useState(0);
   const total = giftBox.reduce((s, e) => s + Number(e.price), 0);
 
   // VAU Club preview: if the signed-in user's next gift is the reward one, show
@@ -1257,14 +1265,19 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
   const resetForm = () => {
     setBuyerEmailInput(""); setVoucherType("bearer"); setRecipientName(""); setRecipientEmail("");
     setMethod("card"); setCardLast4(""); setAcceptTerms(false); setMarketingOptIn(false);
+    setTurnstileToken(""); setTsKey((k) => k + 1);
   };
   const closeAll = () => { setOrderCode(null); setVoucher(null); setLastPayment?.(null); resetForm(); close(); };
 
   const emailOk = /.+@.+\..+/.test(buyerEmail);
   const recipientOk = voucherType !== "personalized" || /.+@.+\..+/.test(recipientEmail);
-  const canPay = emailOk && recipientOk && giftBox.length > 0 && acceptTerms;
+  const humanOk = !TURNSTILE_ON || !!turnstileToken;
+  const canPay = emailOk && recipientOk && giftBox.length > 0 && acceptTerms && humanOk;
 
-  const submit = () => handleCheckout({ buyerEmail, buyerName: user?.name, voucherType, recipientName, recipientEmail, method, cardLast4, acceptTerms, marketingOptIn });
+  const submit = async () => {
+    await handleCheckout({ buyerEmail, buyerName: user?.name, voucherType, recipientName, recipientEmail, method, cardLast4, acceptTerms, marketingOptIn, turnstileToken });
+    if (TURNSTILE_ON) { setTurnstileToken(""); setTsKey((k) => k + 1); } // consumed — refresh for any retry
+  };
 
   const methods = [
     ["card", t("pay_card"), CreditCard],
@@ -1439,6 +1452,11 @@ function GiftDrawer({ open, close, t, loc, giftBox, removeFromGiftBox, clearGift
               </div>
               {checkoutError && (
                 <p className="rounded-xl bg-coral-50 text-coral-700 text-sm font-semibold px-4 py-3 text-center">{checkoutError}</p>
+              )}
+              {TURNSTILE_ON && (
+                <div className="flex justify-center">
+                  <Turnstile key={tsKey} action="checkout" onToken={setTurnstileToken} />
+                </div>
               )}
               <Btn variant="primary" size="lg" className="w-full" loading={checkoutLoading} disabled={!canPay} onClick={submit}>
                 {t("checkout")} · {nis(payable)}

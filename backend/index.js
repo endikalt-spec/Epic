@@ -10,6 +10,7 @@ const fraud = require('./fraud');
 const { getGateway, SUPPORTED_METHODS } = require('./payments');
 const { sendVoucherEmail } = require('./email');
 const assistant = require('./assistant');
+const turnstile = require('./turnstile');
 const customers = require('./customers');
 const crm = require('./crm');
 const reviews = require('./reviews');
@@ -213,9 +214,12 @@ app.post('/api/checkout', async (req, res) => {
   const {
     experienceIds, method = 'card', recipient = null, buyerEmail, buyerName,
     voucherType = 'bearer', cardLast4, locale,
-    acceptTerms, marketingOptIn = false,
+    acceptTerms, marketingOptIn = false, turnstileToken,
   } = req.body || {};
   if (fraud.tooManyAttempts(`checkout:${clientIp(req)}`, { max: 20 })) return res.status(429).json({ error: 'Too many attempts. Try later.' });
+  // Bot gate: block automated card-testing before doing any pricing/charging work.
+  const human = await turnstile.verify(turnstileToken, clientIp(req));
+  if (!human.ok) return res.status(403).json({ error: 'captcha_failed' });
   if (!Array.isArray(experienceIds) || experienceIds.length === 0 || experienceIds.length > 5) {
     return res.status(400).json({ error: 'Invalid experience selection (1-5 required)' });
   }
@@ -579,7 +583,16 @@ app.post('/api/admin/auth/login', async (req, res) => {
   const ip = clientIp(req);
   if (fraud.tooManyAttempts(`admin-login:${ip}`, { max: 15 })) return res.status(429).json({ error: 'too_many_attempts' });
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const { password, totp } = req.body || {};
+  const { password, totp, turnstileToken } = req.body || {};
+
+  // Bot gate on the password step (first submit, no TOTP yet). The 2FA step is a
+  // second POST that carries `totp`; it can only be reached after a correct
+  // password was accepted here, which already required a valid human token — so
+  // it is not re-challenged (and the widget token is single-use anyway).
+  if (!totp) {
+    const human = await turnstile.verify(turnstileToken, ip);
+    if (!human.ok) { await adminAudit(email, ip, 'captcha'); return res.status(403).json({ error: 'captcha_failed' }); }
+  }
 
   const row = await dbTry(() => db.query('SELECT * FROM admin_users WHERE email=$1', [email]).then((r) => r.rows[0]));
   if (row === DB_ERROR) return res.status(503).json({ error: 'DB unavailable' });

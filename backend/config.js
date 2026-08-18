@@ -125,6 +125,17 @@ const config = {
     hasKey: !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN),
   },
 
+  // ── Bot protection (Cloudflare Turnstile) ──
+  // A "prove you're human" widget shown on the checkout and admin-login forms.
+  // The site key is public (baked into the frontend build as VITE_TURNSTILE_SITE_KEY);
+  // the secret key is verified server-side. When the secret is unset the gate is
+  // OFF (verification is skipped), so the site runs unchanged until keys are added.
+  turnstile: {
+    siteKey: process.env.TURNSTILE_SITE_KEY || '',
+    secret: process.env.TURNSTILE_SECRET_KEY || '',
+    enabled: !!process.env.TURNSTILE_SECRET_KEY,
+  },
+
   // ── Fraud / anti-abuse ──
   fraud: {
     // 12 months from purchase, set by the business owner. NOTE: Israel's
@@ -138,6 +149,7 @@ const config = {
 };
 
 config.isDemo = {
+  turnstile: !config.turnstile.enabled,
   google: !config.google.clientId,
   apple: !config.apple.clientId,
   payments: config.payments.provider === 'mock' || !config.payments.stripe.secretKey,

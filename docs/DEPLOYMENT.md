@@ -77,6 +77,10 @@ Until the domain shows **verified/authenticated** in Brevo, keep `EMAIL_TRANSPOR
 - `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` / `STRIPE_WEBHOOK_SECRET` — then set `PAYMENT_PROVIDER=stripe`. Add a Stripe webhook to `https://api.vaugift.com/api/payments/webhook`.
 - `ANTHROPIC_API_KEY` — upgrades the gift assistant from rules to Claude (optional).
 - `GOOGLE_CLIENT_ID/SECRET`, Apple keys — real social sign-in (optional; without them social login stays disabled in prod).
+- **Bot protection (Cloudflare Turnstile)** — shows a "prove you're human" check on checkout and admin login. Both keys blank = gate off (unchanged behaviour). To turn it on:
+  1. Cloudflare dashboard → **Turnstile** → *Add widget*: name it VAU, add hostname `vaugift.com` (and `www.vaugift.com`), widget mode **Managed**. Copy the **Site key** and **Secret key**.
+  2. On **vau-web** set `VITE_TURNSTILE_SITE_KEY` = site key; on **vau-api** set `TURNSTILE_SECRET_KEY` = secret key (`TURNSTILE_SITE_KEY` there is optional/reference). Redeploy both (the site key is baked into the SPA build).
+  3. Cloudflare → **Security → Bots → Bot Fight Mode: ON** — this silently filters known bots site-wide without challenging real users or Googlebot.
 
 See `backend/.env.production.example` for the complete annotated list.
 
@@ -110,6 +114,7 @@ Then click through once on the live site:
 - [ ] Fill the four registration facts in `frontend/src/company.js` (legal name, ח.פ., address, phone) and have an Israeli attorney review Terms & Privacy.
 - [ ] Set a strong `ADMIN_PASSWORD`; log in and enrol **2FA** for every admin.
 - [ ] Confirm daily Postgres backups are enabled in Render.
+- [ ] Enable Cloudflare **Bot Fight Mode** and add **Turnstile** keys (see §4) to keep traffic clean.
 - [ ] (Optional) Cloudflare WAF + rate-limiting rules in front of `api.vaugift.com`.
 
 ---

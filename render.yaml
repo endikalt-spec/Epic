@@ -101,6 +101,13 @@ services:
       # note in config.js about Israel's 5-year minimum for gift vouchers).
       - key: VOUCHER_VALIDITY_DAYS
         value: "365"
+      # Bot protection (Cloudflare Turnstile). Paste the SECRET key to turn the
+      # "prove you're human" gate ON for checkout + admin login. Leave blank to
+      # keep it off. The matching public SITE key goes on the vau-web service.
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: TURNSTILE_SITE_KEY
+        sync: false
 
   # ── Frontend SPA (static site, global CDN) ───────────────────────────────
   - type: web
@@ -114,6 +121,11 @@ services:
       # Baked into the build — points the SPA at the API subdomain.
       - key: VITE_API_URL
         value: https://api.vaugift.com/api
+      # Cloudflare Turnstile public SITE key (safe to expose; baked into the
+      # build). Set it to show the "prove you're human" widget on checkout and
+      # admin login. Must pair with TURNSTILE_SECRET_KEY on the vau-api service.
+      - key: VITE_TURNSTILE_SITE_KEY
+        sync: false
     routes:
       # SPA fallback: every path (incl. /redeem?code=… from voucher QR codes)
       # serves index.html so client-side routing can take over.

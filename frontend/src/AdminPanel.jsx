@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { ShieldCheck, Lock, LogOut, Loader2, Building2, Plus, Check, Image as ImageIcon, KeyRound, ArrowLeft } from "lucide-react";
 import { DEMO, adminLogin, adminMe, admin2faSetup, admin2faEnable, adminRecoverStart, adminRecoverVerify, adminGetBusinesses, adminCreateBusiness, adminUpdateBusiness, adminGetStats } from "./api";
+import Turnstile from "./Turnstile";
+import { TURNSTILE_ON } from "./turnstileEnv";
 
 // Bilingual micro-dictionary (internal tool — kept local to avoid bloating i18n).
 const TXT = {
@@ -53,6 +55,10 @@ export default function AdminPanel({ lang = "he", goHome }) {
   const [recCode, setRecCode] = useState("");
   const [recNewPass, setRecNewPass] = useState("");
   const [recDemo, setRecDemo] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [tsKey, setTsKey] = useState(0);
+  // A submitted token is single-use; remount the widget to mint a fresh one.
+  const refreshTurnstile = () => { setTurnstileToken(""); setTsKey((k) => k + 1); };
 
   useEffect(() => {
     if (localStorage.getItem("vau_admin_token")) adminMe().then((d) => { setAdmin(d.admin); setStep("dashboard"); }).catch(() => {});
@@ -61,7 +67,7 @@ export default function AdminPanel({ lang = "he", goHome }) {
   const doLogin = async (withTotp) => {
     setBusy(true); setError("");
     try {
-      const res = await adminLogin({ email, password, totp: withTotp ? totp : undefined });
+      const res = await adminLogin({ email, password, totp: withTotp ? totp : undefined, turnstileToken: withTotp ? undefined : turnstileToken });
       if (res.needs2fa) { setStep("twofa"); return; }
       localStorage.setItem("vau_admin_token", res.token);
       setAdmin(res.admin); setStep("dashboard");
@@ -70,6 +76,7 @@ export default function AdminPanel({ lang = "he", goHome }) {
       if (s === 423) setError(d?.message || (lang === "ru" ? "Аккаунт заблокирован. Попробуйте позже или восстановите доступ." : "החשבון נעול. נסו מאוחר יותר או שחזרו גישה."));
       else if (d?.error === "invalid_2fa") setError(lang === "ru" ? "Неверный код 2FA." : "קוד דו-שלבי שגוי.");
       else setError((lang === "ru" ? "Неверный логин или пароль." : "אימייל או סיסמה שגויים.") + (d?.attemptsLeft != null ? ` (${d.attemptsLeft})` : ""));
+      if (!withTotp) refreshTurnstile(); // the password-step token was consumed
     } finally { setBusy(false); }
   };
 
@@ -88,6 +95,9 @@ export default function AdminPanel({ lang = "he", goHome }) {
 
   const logout = () => { localStorage.removeItem("vau_admin_token"); setAdmin(null); setStep("login"); setPassword(""); setTotp(""); };
 
+  // Turnstile gates only the password step; when off, always satisfied.
+  const humanOk = !TURNSTILE_ON || !!turnstileToken;
+
   // ── Auth screens ──
   if (step !== "dashboard") {
     return (
@@ -105,8 +115,9 @@ export default function AdminPanel({ lang = "he", goHome }) {
         {step === "login" && (
           <div className="space-y-3">
             <Field label={T("email")}><input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" className={inp} /></Field>
-            <Field label={T("password")}><input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" className={inp} onKeyDown={(e) => e.key === "Enter" && doLogin(false)} /></Field>
-            <Btn onClick={() => doLogin(false)} busy={busy}><Lock size={16} /> {T("signin")}</Btn>
+            <Field label={T("password")}><input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" className={inp} onKeyDown={(e) => e.key === "Enter" && humanOk && doLogin(false)} /></Field>
+            {TURNSTILE_ON && <div className="flex justify-center pt-1"><Turnstile key={tsKey} action="admin_login" onToken={setTurnstileToken} /></div>}
+            <Btn onClick={() => doLogin(false)} busy={busy} disabled={!humanOk}><Lock size={16} /> {T("signin")}</Btn>
             <button onClick={() => { setError(""); setStep("recover"); }} className="text-sm text-ink-500 hover:text-coral-600 w-full text-center pt-1">{T("forgot")}</button>
           </div>
         )}
@@ -319,8 +330,8 @@ const inp = "w-full rounded-xl bg-cream-100 px-4 py-2.5 text-sm outline-none foc
 function Field({ label, children }) {
   return <label className="block"><span className="text-xs font-bold text-ink-500 mb-1 block">{label}</span>{children}</label>;
 }
-function Btn({ onClick, busy, children }) {
-  return <button onClick={onClick} disabled={busy} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-coral-500 text-white px-5 py-3 font-bold disabled:opacity-60">{busy ? <Loader2 size={16} className="animate-spin" /> : children}</button>;
+function Btn({ onClick, busy, disabled, children }) {
+  return <button onClick={onClick} disabled={busy || disabled} className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-coral-500 text-white px-5 py-3 font-bold disabled:opacity-60">{busy ? <Loader2 size={16} className="animate-spin" /> : children}</button>;
 }
 function Shell({ children, rtl, goHome }) {
   return (
